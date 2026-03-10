@@ -1,0 +1,301 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 215 28% 17%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 28% 17%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 28% 17%;
+
+    --primary: 199 89% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 215 20% 47%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 213 27% 84%;
+    --muted-foreground: 215 20% 47%;
+
+    --accent: 199 95% 72%;
+    --accent-foreground: 215 28% 17%;
+
+    --destructive: 0 84% 63%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 72% 41%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 214 32% 86%;
+    --input: 214 32% 86%;
+    --ring: 199 89% 55%;
+
+    --radius: 0.5rem;
+  }
+
+  .dark,
+  .black,
+  .navy,
+  .forest {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 96%;
+
+    --card: 222 47% 13%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 222 47% 13%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 199 95% 72%;
+    --primary-foreground: 215 28% 17%;
+
+    --secondary: 215 20% 47%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 217 23% 24%;
+    --muted-foreground: 213 27% 78%;
+
+    --accent: 199 89% 55%;
+    --accent-foreground: 215 28% 17%;
+
+    --destructive: 0 84% 63%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 72% 41%;
+    --success-foreground: 210 40% 96%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 210 40% 96%;
+
+    --border: 217 24% 28%;
+    --input: 217 24% 28%;
+    --ring: 199 95% 72%;
+  }
+
+  .black {
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+
+    --card: 0 0% 4%;
+    --card-foreground: 0 0% 100%;
+
+    --popover: 0 0% 4%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 199 95% 72%;
+    --primary-foreground: 215 28% 17%;
+
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 60%;
+
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 63%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 12%;
+    --input: 0 0% 12%;
+  }
+
+  .navy {
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+
+    --card: 224 71% 7%;
+    --card-foreground: 213 31% 91%;
+
+    --popover: 224 71% 7%;
+    --popover-foreground: 213 31% 91%;
+
+    --primary: 210 100% 50%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 222 47% 11%;
+    --secondary-foreground: 213 31% 91%;
+
+    --muted: 223 47% 11%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
+    --ring: 224 76% 48%;
+  }
+
+  .forest {
+    --background: 156 70% 3%;
+    --foreground: 156 10% 94%;
+
+    --card: 156 70% 5%;
+    --card-foreground: 156 10% 94%;
+
+    --popover: 156 70% 5%;
+    --popover-foreground: 156 10% 94%;
+
+    --primary: 156 80% 45%;
+    --primary-foreground: 156 10% 94%;
+
+    --secondary: 156 30% 12%;
+    --secondary-foreground: 156 10% 94%;
+
+    --muted: 156 30% 12%;
+    --muted-foreground: 156 10% 65%;
+
+    --accent: 156 30% 12%;
+    --accent-foreground: 156 10% 94%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 156 10% 94%;
+
+    --border: 156 30% 12%;
+    --input: 156 30% 12%;
+    --ring: 156 80% 45%;
+  }
+
+  /* Blue Theme */
+  .theme-blue {
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --ring: 221.2 83.2% 53.3%;
+  }
+  .dark .theme-blue {
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --ring: 217.2 91.2% 59.8%;
+  }
+
+  /* Green Theme */
+  .theme-green {
+    --primary: 142.1 76.2% 36.3%;
+    --primary-foreground: 355.7 100% 97.3%;
+    --ring: 142.1 76.2% 36.3%;
+  }
+  .dark .theme-green {
+    --primary: 142.1 70.6% 45.3%;
+    --primary-foreground: 144.9 80.4% 10%;
+    --ring: 142.1 70.6% 45.3%;
+  }
+
+  /* Purple Theme */
+  .theme-purple {
+    --primary: 262.1 83.3% 57.8%;
+    --primary-foreground: 210 40% 98%;
+    --ring: 262.1 83.3% 57.8%;
+  }
+  .dark .theme-purple {
+    --primary: 263.4 70% 50.4%;
+    --primary-foreground: 210 40% 98%;
+    --ring: 263.4 70% 50.4%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--muted-foreground));
+    font-family: 'Inter', sans-serif;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -moz-osx-font-smoothing: grayscale;
+    /* overflow: hidden; Removed to allow normal scrolling on public pages */
+  }
+
+  /* Custom Scrollbar Styling for Webkit to match Sidebar ScrollArea */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 9999px;
+    border: 2px solid transparent; /* Mimic padding/inset look */
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  h1 {
+    font-family: 'Inter', sans-serif;
+    font-size: 2.5rem;
+    line-height: 3rem;
+    font-weight: 800;
+    color: hsl(var(--foreground));
+  }
+
+  h2 {
+    font-family: 'Inter', sans-serif;
+    font-size: 2rem;
+    line-height: 2.5rem;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+  }
+
+  h3 {
+    font-family: 'Inter', sans-serif;
+    font-size: 1.5rem;
+    line-height: 2rem;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+
+  p {
+    font-size: 1rem;
+    line-height: 1.5rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  small {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: hsl(var(--muted-foreground));
+  }
+
+  a {
+    color: hsl(var(--primary));
+    text-underline-offset: 4px;
+    transition: color 0.2s;
+  }
+
+  a:hover {
+    color: hsl(var(--primary) / 0.8);
+  }
+
+  ::selection {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+}

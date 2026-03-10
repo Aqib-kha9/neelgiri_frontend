@@ -1,0 +1,80 @@
+[
+  {
+    "id": "user-1",
+    "email": "superadmin@logistics.com",
+    "name": "Super Admin",
+    "role": "super_admin",
+    "tenantId": "tenant-super",
+    "assignedBranchIds": [],
+    "isActive": true,
+    "createdAt": "2024-01-01T00:00:00Z",
+    "phone": "+91-9876543210"
+  },
+  {
+    "id": "user-2",
+    "email": "partner@delivery.com",
+    "name": "Partner Admin",
+    "role": "partner_admin",
+    "tenantId": "tenant-partner-1",
+    "assignedBranchIds": ["branch-1", "branch-2"],
+    "isActive": true,
+    "createdAt": "2024-01-02T00:00:00Z",
+    "phone": "+91-9876543211"
+  },
+  {
+    "id": "user-3",
+    "email": "branch@delivery.com",
+    "name": "Branch Manager",
+    "role": "branch_admin",
+    "tenantId": "tenant-partner-1",
+    "assignedBranchIds": ["branch-1"],
+    "isActive": true,
+    "createdAt": "2024-01-03T00:00:00Z",
+    "phone": "+91-9876543212"
+  },
+  {
+    "id": "user-4",
+    "email": "warehouse@delivery.com",
+    "name": "Warehouse Admin",
+    "role": "warehouse_admin",
+    "tenantId": "tenant-partner-1",
+    "assignedBranchIds": ["branch-1"],
+    "isActive": true,
+    "createdAt": "2024-01-04T00:00:00Z",
+    "phone": "+91-9876543213"
+  },
+  {
+    "id": "user-5",
+    "email": "dispatcher@delivery.com",
+    "name": "Dispatcher",
+    "role": "dispatcher",
+    "tenantId": "tenant-partner-1",
+    "assignedBranchIds": ["branch-1"],
+    "isActive": true,
+    "createdAt": "2024-01-05T00:00:00Z",
+    "phone": "+91-9876543214"
+  },
+  {
+    "id": "user-6",
+    "email": "rider@delivery.com",
+    "name": "Rider",
+    "role": "rider",
+    "tenantId": "tenant-partner-1",
+    "assignedBranchIds": ["branch-1"],
+    "isActive": true,
+    "createdAt": "2024-01-06T00:00:00Z",
+    "phone": "+91-9876543215"
+  },
+  {
+    "id": "user-7",
+    "email": "customer@example.com",
+    "name": "Customer",
+    "role": "customer",
+    "tenantId": "tenant-partner-1",
+    "assignedBranchIds": [],
+    "isActive": true,
+    "createdAt": "2024-01-07T00:00:00Z",
+    "phone": "+91-9876543216"
+  }
+]
+

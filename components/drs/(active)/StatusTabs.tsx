@@ -1,0 +1,86 @@
+import { Clock, PlayCircle, PauseCircle, CheckCircle2 } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+
+interface StatusTabsProps {
+  activeTab: string;
+  setActiveTab: (value: string) => void;
+  activeDRSData: any[];
+}
+
+const StatusTabs = ({
+  activeTab,
+  setActiveTab,
+  activeDRSData,
+}: StatusTabsProps) => {
+  const getStatusCount = (status: string) => {
+    return activeDRSData.filter(
+      (drs) => status === "all" || drs.status === status
+    ).length;
+  };
+
+  return (
+    <Card className="rounded-2xl border-border/70 bg-card/95 shadow-card">
+      <CardContent className="p-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-4 rounded-xl bg-muted/50 p-1">
+            <TabsTrigger
+              value="all"
+              className="rounded-lg data-[state=active]:bg-background flex gap-2"
+            >
+              All DRS
+              <Badge
+                variant="secondary"
+                className="px-1.5 py-0.5 text-xs rounded-full"
+              >
+                {activeDRSData.length}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger
+              value="scheduled"
+              className="rounded-lg data-[state=active]:bg-background flex gap-2"
+            >
+              <Clock className="h-4 w-4" />
+              Scheduled
+              <Badge
+                variant="secondary"
+                className="px-1.5 py-0.5 text-xs rounded-full"
+              >
+                {getStatusCount("scheduled")}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger
+              value="in_progress"
+              className="rounded-lg data-[state=active]:bg-background flex gap-2"
+            >
+              <PlayCircle className="h-4 w-4" />
+              In Progress
+              <Badge
+                variant="secondary"
+                className="px-1.5 py-0.5 text-xs rounded-full"
+              >
+                {getStatusCount("in_progress")}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger
+              value="paused"
+              className="rounded-lg data-[state=active]:bg-background flex gap-2"
+            >
+              <PauseCircle className="h-4 w-4" />
+              Paused
+              <Badge
+                variant="secondary"
+                className="px-1.5 py-0.5 text-xs rounded-full"
+              >
+                {getStatusCount("paused")}
+              </Badge>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default StatusTabs;

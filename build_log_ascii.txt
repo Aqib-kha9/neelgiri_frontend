@@ -1,0 +1,98 @@
+
+> delivery_f@0.1.0 build
+> next build
+
+node.exe : [baseline
+-browser-mapping] 
+The data in this 
+module is over two 
+months old.  To 
+ensure accurate 
+Baseline data, 
+please update: `npm 
+i baseline-browser-m
+apping@latest -D`
+At C:\Program Files\
+nodejs\npm.ps1:29 
+char:3
++   & $NODE_EXE 
+$NPM_CLI_JS $args
++   ~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
+    + CategoryInfo  
+            : NotS  
+  pecified: ([bas   
+ eline-brows...p    
+ing@latest -D`:    
+String) [], Rem    
+oteException
+    + FullyQualifie 
+   dErrorId : Nati  
+  veCommandError
+ 
+   ??? Next.js 16.0.1 (Turbopack)
+   - Experiments (use with caution):
+     ?? optimizePackageImports
+
+ ??? The 
+"middleware" file 
+convention is 
+deprecated. Please 
+use "proxy" 
+instead. Learn 
+more: https://nextjs
+.org/docs/messages/m
+iddleware-to-proxy
+   Creating an optimized production build ...
+[baseline-browser-ma
+pping] The data in 
+this module is over 
+two months old.  To 
+ensure accurate 
+Baseline data, 
+please update: `npm 
+i baseline-browser-m
+apping@latest -D`
+ ??? Compiled successfully in 9.9s
+   Running TypeScript ...
+Failed to compile.
+
+./components/master/
+(locations)/mockData
+.ts:54:5
+Type error: Type 
+'null' is not 
+assignable to type 
+'string | 
+undefined'.
+
+[0m [90m 52 
+|[39m     createdAt
+[33m:[39m [32m"20
+24-01-15T10:00:00Z"
+[39m[33m,[39m
+ [90m 53 |[39m    
+ updatedAt[33m:[39
+m [32m"2024-12-11T0
+8:30:00Z"[39m[33m,
+[39m
+[31m[1m>[22m[39m
+[90m 54 |[39m     
+parentHubId[33m:[3
+9m [36mnull[39m[3
+3m,[39m
+ [90m    |[39m    
+ 
+[31m[1m^[22m[39m
+ [90m 55 |[39m    
+ ownershipType[33m:
+[39m [32m"COCO"[3
+9m[33m,[39m
+ [90m 56 |[39m   
+}[33m,[39m
+ [90m 57 |[39m   
+{[0m
+Next.js build 
+worker exited with 
+code: 1 and signal: 
+null

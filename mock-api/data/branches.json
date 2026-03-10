@@ -1,0 +1,47 @@
+[
+  {
+    "id": "branch-1",
+    "name": "Mumbai Central Branch",
+    "tenantId": "tenant-partner-1",
+    "city": "Mumbai",
+    "address": "123 Main Street, Mumbai Central",
+    "pincode": "400008",
+    "phone": "+91-22-12345678",
+    "isActive": true,
+    "createdAt": "2024-01-02T00:00:00Z"
+  },
+  {
+    "id": "branch-2",
+    "name": "Mumbai Andheri Branch",
+    "tenantId": "tenant-partner-1",
+    "city": "Mumbai",
+    "address": "456 Andheri West",
+    "pincode": "400053",
+    "phone": "+91-22-12345679",
+    "isActive": true,
+    "createdAt": "2024-01-02T00:00:00Z"
+  },
+  {
+    "id": "branch-3",
+    "name": "Delhi Connaught Place Branch",
+    "tenantId": "tenant-partner-2",
+    "city": "Delhi",
+    "address": "789 Connaught Place",
+    "pincode": "110001",
+    "phone": "+91-11-12345678",
+    "isActive": true,
+    "createdAt": "2024-01-03T00:00:00Z"
+  },
+  {
+    "id": "branch-super",
+    "name": "Super Admin Branch",
+    "tenantId": "tenant-super",
+    "city": "Mumbai",
+    "address": "Super Admin Office",
+    "pincode": "400001",
+    "phone": "+91-22-99999999",
+    "isActive": true,
+    "createdAt": "2024-01-01T00:00:00Z"
+  }
+]
+

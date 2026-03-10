@@ -1,0 +1,27 @@
+[
+  {
+    "id": "tenant-super",
+    "name": "Super Admin Tenant",
+    "type": "super_admin",
+    "city": "Mumbai",
+    "isActive": true,
+    "createdAt": "2024-01-01T00:00:00Z"
+  },
+  {
+    "id": "tenant-partner-1",
+    "name": "Fast Delivery Partners",
+    "type": "partner",
+    "city": "Mumbai",
+    "isActive": true,
+    "createdAt": "2024-01-02T00:00:00Z"
+  },
+  {
+    "id": "tenant-partner-2",
+    "name": "Express Logistics",
+    "type": "partner",
+    "city": "Delhi",
+    "isActive": true,
+    "createdAt": "2024-01-03T00:00:00Z"
+  }
+]
+

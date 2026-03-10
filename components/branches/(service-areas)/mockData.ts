@@ -1,0 +1,202 @@
+import { Branch, Pincode, ServiceArea } from "./types";
+
+export const branches: Branch[] = [
+  {
+    id: "BR-001",
+    name: "Mumbai Central Hub",
+    code: "MUM-CENT",
+    city: "Mumbai",
+    state: "Maharashtra",
+    status: "active",
+  },
+  {
+    id: "BR-002",
+    name: "Delhi North Branch",
+    code: "DEL-NORTH",
+    city: "Delhi",
+    state: "Delhi",
+    status: "active",
+  },
+  {
+    id: "BR-003",
+    name: "Bangalore South",
+    code: "BLR-SOUTH",
+    city: "Bangalore",
+    state: "Karnataka",
+    status: "active",
+  },
+  {
+    id: "BR-004",
+    name: "Chennai Central",
+    code: "CHN-CENT",
+    city: "Chennai",
+    state: "Tamil Nadu",
+    status: "inactive",
+  },
+  {
+    id: "BR-005",
+    name: "Kolkata East",
+    code: "KOL-EAST",
+    city: "Kolkata",
+    state: "West Bengal",
+    status: "active",
+  },
+  {
+    id: "BR-006",
+    name: "Hyderabad West",
+    code: "HYD-WEST",
+    city: "Hyderabad",
+    state: "Telangana",
+    status: "active",
+  },
+  {
+    id: "BR-007",
+    name: "Pune Central",
+    code: "PUN-CENT",
+    city: "Pune",
+    state: "Maharashtra",
+    status: "active",
+  },
+];
+
+export const pincodes: Pincode[] = [
+  {
+    pincode: "400001",
+    city: "Mumbai",
+    state: "Maharashtra",
+    district: "Mumbai City",
+  },
+  {
+    pincode: "400002",
+    city: "Mumbai",
+    state: "Maharashtra",
+    district: "Mumbai City",
+  },
+  {
+    pincode: "400003",
+    city: "Mumbai",
+    state: "Maharashtra",
+    district: "Mumbai City",
+  },
+  {
+    pincode: "400004",
+    city: "Mumbai",
+    state: "Maharashtra",
+    district: "Mumbai City",
+  },
+  {
+    pincode: "400005",
+    city: "Mumbai",
+    state: "Maharashtra",
+    district: "Mumbai City",
+  },
+  {
+    pincode: "400006",
+    city: "Mumbai",
+    state: "Maharashtra",
+    district: "Mumbai City",
+  },
+  {
+    pincode: "110001",
+    city: "Delhi",
+    state: "Delhi",
+    district: "Central Delhi",
+  },
+  {
+    pincode: "110002",
+    city: "Delhi",
+    state: "Delhi",
+    district: "Central Delhi",
+  },
+  { pincode: "110003", city: "Delhi", state: "Delhi", district: "New Delhi" },
+  { pincode: "110004", city: "Delhi", state: "Delhi", district: "New Delhi" },
+  {
+    pincode: "560001",
+    city: "Bangalore",
+    state: "Karnataka",
+    district: "Bangalore Urban",
+  },
+  {
+    pincode: "560002",
+    city: "Bangalore",
+    state: "Karnataka",
+    district: "Bangalore Urban",
+  },
+  {
+    pincode: "560003",
+    city: "Bangalore",
+    state: "Karnataka",
+    district: "Bangalore Urban",
+  },
+  {
+    pincode: "560004",
+    city: "Bangalore",
+    state: "Karnataka",
+    district: "Bangalore Urban",
+  },
+  {
+    pincode: "600001",
+    city: "Chennai",
+    state: "Tamil Nadu",
+    district: "Chennai",
+  },
+  {
+    pincode: "600002",
+    city: "Chennai",
+    state: "Tamil Nadu",
+    district: "Chennai",
+  },
+  {
+    pincode: "600003",
+    city: "Chennai",
+    state: "Tamil Nadu",
+    district: "Chennai",
+  },
+  {
+    pincode: "700001",
+    city: "Kolkata",
+    state: "West Bengal",
+    district: "Kolkata",
+  },
+  {
+    pincode: "700002",
+    city: "Kolkata",
+    state: "West Bengal",
+    district: "Kolkata",
+  },
+  {
+    pincode: "500001",
+    city: "Hyderabad",
+    state: "Telangana",
+    district: "Hyderabad",
+  },
+  {
+    pincode: "500002",
+    city: "Hyderabad",
+    state: "Telangana",
+    district: "Hyderabad",
+  },
+  { pincode: "411001", city: "Pune", state: "Maharashtra", district: "Pune" },
+  { pincode: "411002", city: "Pune", state: "Maharashtra", district: "Pune" },
+];
+
+export const serviceAreas: ServiceArea[] = [
+  {
+    branchId: "BR-001",
+    pincodes: ["400001", "400002", "400003"],
+    assignedAt: "2024-01-15",
+    assignedBy: "Admin",
+  },
+  {
+    branchId: "BR-002",
+    pincodes: ["110001", "110002"],
+    assignedAt: "2024-01-16",
+    assignedBy: "Admin",
+  },
+  {
+    branchId: "BR-003",
+    pincodes: ["560001", "560002"],
+    assignedAt: "2024-01-17",
+    assignedBy: "Admin",
+  },
+];
