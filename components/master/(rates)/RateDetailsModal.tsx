@@ -7,7 +7,7 @@ import {
   Clock,
   Users,
   Tag,
-  Map,
+
   Package,
   Percent,
   Shield,
@@ -180,7 +180,7 @@ const RateDetailsModal = ({ rate, onClose }: RateDetailsModalProps) => {
                       <div>
                         <p className="font-medium">{slab.slabName}</p>
                         <p className="text-sm text-muted-foreground">
-                          {slab.minWeight} - {slab.maxWeight} kg
+                          {slab.minWeight || 0} - {slab.maxWeight || 0} kg
                         </p>
                       </div>
                       <div className="text-right">
@@ -197,43 +197,43 @@ const RateDetailsModal = ({ rate, onClose }: RateDetailsModalProps) => {
               </CardContent>
             </Card>
 
-            {/* Zone Rates */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Map className="h-4 w-4" />
-                  Zone Rates
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {rate.zones.map((zone) => (
-                    <div key={zone.id} className="border rounded-lg p-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="font-medium">
-                          {zone.fromZone} → {zone.toZone}
+            {/* Distance-Based Industry Tiers */}
+            {(rate.distanceBuckets?.length || 0) > 0 && (
+              <Card className="border-primary/20 bg-primary/5">
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-primary" />
+                    Industry Pricing Tiers (Shiprocket Model)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {rate.distanceBuckets?.map((bucket) => (
+                      <div key={bucket.id} className="bg-background border rounded-lg p-3 shadow-sm">
+                        <div className="flex justify-between items-center mb-2 border-b pb-2">
+                          <span className="font-bold text-primary">{bucket.name}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {bucket.minDistance}-{bucket.maxDistance === 0 ? '∞' : bucket.maxDistance} KM
+                          </Badge>
                         </div>
-                        <Badge
-                          variant={zone.isActive ? "success" : "secondary"}
-                        >
-                          {zone.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>
-                          <p className="text-muted-foreground">Rate</p>
-                          <p className="font-medium">₹{zone.rate}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Transit Days</p>
-                          <p className="font-medium">{zone.transitDays} days</p>
+                        <div className="grid grid-cols-2 gap-y-2 text-sm">
+                          <div>
+                            <p className="text-muted-foreground text-xs uppercase">Base ({bucket.baseWeight}kg)</p>
+                            <p className="font-bold text-lg">₹{bucket.baseRate}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-muted-foreground text-xs uppercase">Addl. ({bucket.additionalWeight}kg)</p>
+                            <p className="font-bold text-lg">₹{bucket.additionalRate}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+
 
             {/* Charges */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -244,11 +244,11 @@ const RateDetailsModal = ({ rate, onClose }: RateDetailsModalProps) => {
                     <h4 className="font-medium">Fuel Surcharge</h4>
                   </div>
                   <p className="text-2xl font-bold">
-                    {rate.fuelSurcharge.percentage}%
+                    {rate.fuelSurcharge?.percentage || 0}%
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Min: ₹{rate.fuelSurcharge.minAmount}, Max: ₹
-                    {rate.fuelSurcharge.maxAmount || "No limit"}
+                    Min: ₹{rate.fuelSurcharge?.minAmount || 0}, Max: ₹
+                    {rate.fuelSurcharge?.maxAmount || "No limit"}
                   </p>
                 </CardContent>
               </Card>
@@ -260,11 +260,11 @@ const RateDetailsModal = ({ rate, onClose }: RateDetailsModalProps) => {
                     <h4 className="font-medium">FOV Charge</h4>
                   </div>
                   <p className="text-2xl font-bold">
-                    {rate.fovCharge.percentage}%
+                    {rate.fovCharge?.percentage || 0}%
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    Min: ₹{rate.fovCharge.minAmount}, Max: ₹
-                    {rate.fovCharge.maxAmount || "No limit"}
+                    Min: ₹{rate.fovCharge?.minAmount || 0}, Max: ₹
+                    {rate.fovCharge?.maxAmount || "No limit"}
                   </p>
                 </CardContent>
               </Card>
@@ -275,16 +275,16 @@ const RateDetailsModal = ({ rate, onClose }: RateDetailsModalProps) => {
                     <IndianRupee className="h-4 w-4 text-green-500" />
                     <h4 className="font-medium">Minimum Charge</h4>
                   </div>
-                  <p className="text-2xl font-bold">₹{rate.minCharge.amount}</p>
+                  <p className="text-2xl font-bold">₹{rate.minCharge?.amount || 0}</p>
                   <p className="text-sm text-muted-foreground">
-                    Zones: {rate.minCharge.applicableZones.join(", ")}
+                    Zones: {rate.minCharge?.applicableZones?.join(", ") || "All"}
                   </p>
                 </CardContent>
               </Card>
             </div>
 
             {/* Additional Charges */}
-            {rate.additionalCharges.length > 0 && (
+            {rate.additionalCharges?.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm font-medium">
@@ -328,8 +328,8 @@ const RateDetailsModal = ({ rate, onClose }: RateDetailsModalProps) => {
                       Weight Range
                     </p>
                     <p className="font-medium">
-                      {rate.restrictions.minWeight} -{" "}
-                      {rate.restrictions.maxWeight} kg
+                      {rate.restrictions?.minWeight || 0} -{" "}
+                      {rate.restrictions?.maxWeight || 0} kg
                     </p>
                   </div>
                   <div>
@@ -337,7 +337,7 @@ const RateDetailsModal = ({ rate, onClose }: RateDetailsModalProps) => {
                       Allowed Packaging
                     </p>
                     <p className="font-medium">
-                      {rate.restrictions.allowedPackaging.join(", ")}
+                      {rate.restrictions?.allowedPackaging?.join(", ") || "Standard"}
                     </p>
                   </div>
                   <div className="md:col-span-2">
@@ -345,7 +345,7 @@ const RateDetailsModal = ({ rate, onClose }: RateDetailsModalProps) => {
                       Prohibited Items
                     </p>
                     <p className="font-medium">
-                      {rate.restrictions.prohibitedItems.join(", ") || "None"}
+                      {rate.restrictions?.prohibitedItems?.join(", ") || "None"}
                     </p>
                   </div>
                   {rate.restrictions.specialInstructions && (
@@ -375,18 +375,18 @@ const RateDetailsModal = ({ rate, onClose }: RateDetailsModalProps) => {
                   <div>
                     <p className="text-sm text-muted-foreground">Enabled</p>
                     <p className="font-medium">
-                      {rate.autoCalculate.enabled ? "Yes" : "No"}
+                      {rate.autoCalculate?.enabled ? "Yes" : "No"}
                     </p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Base On</p>
-                    <p className="font-medium">{rate.autoCalculate.baseOn}</p>
+                    <p className="font-medium">{rate.autoCalculate?.baseOn || 'Weight'}</p>
                   </div>
                   <div>
                     <p className="text-sm text-muted-foreground">Rounding</p>
                     <p className="font-medium">
-                      {rate.autoCalculate.rounding} (Factor:{" "}
-                      {rate.autoCalculate.roundingFactor})
+                      {rate.autoCalculate?.rounding || 'None'} (Factor:{" "}
+                      {rate.autoCalculate?.roundingFactor || 1})
                     </p>
                   </div>
                 </div>

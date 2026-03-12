@@ -58,6 +58,7 @@ const defaultForm = {
   branchId: "",
   isServiceable: false,
   isODA: false,
+  isMetro: false,
   transitDays: 3,
   latitude: "",
   longitude: "",
@@ -100,6 +101,7 @@ const PincodeForm = ({ open, onOpenChange, onSave, pincode }: PincodeFormProps) 
         branchId: pincode.branchId?._id || "",
         isServiceable: pincode.isServiceable ?? false,
         isODA: pincode.isODA ?? false,
+        isMetro: pincode.isMetro ?? false,
         transitDays: pincode.transitDays ?? 3,
         latitude: pincode.latitude?.toString() || "",
         longitude: pincode.longitude?.toString() || "",
@@ -136,6 +138,7 @@ const PincodeForm = ({ open, onOpenChange, onSave, pincode }: PincodeFormProps) 
         zone: formData.zone,
         isServiceable: formData.isServiceable,
         isODA: formData.isODA,
+        isMetro: formData.isMetro,
         transitDays: Number(formData.transitDays) || 3,
         branchId: formData.branchId || null,
         latitude: formData.latitude !== "" ? parseFloat(formData.latitude as string) : null,
@@ -340,6 +343,19 @@ const PincodeForm = ({ open, onOpenChange, onSave, pincode }: PincodeFormProps) 
                   <Switch
                     checked={formData.isODA}
                     onCheckedChange={(c) => handleChange("isODA", c)}
+                  />
+                </div>
+                <div className="flex items-center justify-between p-3 rounded-xl border border-blue-500/30 bg-blue-500/5">
+                  <div className="flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-blue-500 flex-shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-blue-700 dark:text-blue-400">Metro City</p>
+                      <p className="text-xs text-muted-foreground">Special metro-to-metro rates apply</p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={formData.isMetro}
+                    onCheckedChange={(c) => handleChange("isMetro", c)}
                   />
                 </div>
               </div>

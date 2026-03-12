@@ -114,7 +114,26 @@ const CustomerForm = ({ customer, onSave, onCancel }: CustomerFormProps) => {
     apiAccess: false,
     apiKey: "",
     webhookUrl: "",
+    rateCard: "",
   });
+
+  const [rateCards, setRateCards] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchRateCards = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("/api/rates", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await response.json();
+        setRateCards(data || []);
+      } catch (error) {
+        console.error("Failed to fetch rate cards:", error);
+      }
+    };
+    fetchRateCards();
+  }, []);
 
   const [gstSearch, setGstSearch] = useState("");
   const [gstLoading, setGstLoading] = useState(false);
@@ -175,6 +194,7 @@ const CustomerForm = ({ customer, onSave, onCancel }: CustomerFormProps) => {
         apiAccess: customer.apiAccess || false,
         apiKey: customer.apiKey || "",
         webhookUrl: customer.webhookUrl || "",
+        rateCard: customer.rateCard || "",
         portalPassword: "", // Reset password on edit
       });
       if (customer.gstin) {
@@ -891,6 +911,29 @@ const CustomerForm = ({ customer, onSave, onCancel }: CustomerFormProps) => {
                 </h3>
 
                 <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="rateCard">Assigned Rate Card *</Label>
+                    <Select
+                      value={formData.rateCard}
+                      onValueChange={(value) =>
+                        handleInputChange("rateCard", value)
+                      }
+                    >
+                      <SelectTrigger className="rounded-lg border-primary/50 bg-primary/5">
+                        <SelectValue placeholder="Select Rate Card (Required for Pricing)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {rateCards.map((card) => (
+                          <SelectItem key={card._id} value={card._id}>
+                            {card.name} ({card.serviceType})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-muted-foreground">
+                      * This rate card will be used to calculate shipping prices for this customer.
+                    </p>
+                  </div>
                   <div className="space-y-2">
                     <Label>Allowed Services</Label>
                     <div className="grid grid-cols-2 gap-2">

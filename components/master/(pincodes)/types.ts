@@ -18,6 +18,7 @@ export interface Pincode {
   isServiceable: boolean;
   isActiveForBranch: boolean;
   isODA?: boolean;
+  isMetro?: boolean;
   transitDays?: number;
   createdAt: string;
   updatedAt: string;

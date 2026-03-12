@@ -46,30 +46,22 @@ export const mockRateRules: RateRule[] = [
     ],
     zones: [
       {
-        id: "1",
         fromZone: "DELHI",
         toZone: "MUMBAI",
-        rate: 120,
-        transitDays: 3,
         isActive: true,
       },
       {
-        id: "2",
         fromZone: "DELHI",
         toZone: "BANGALORE",
-        rate: 150,
-        transitDays: 4,
         isActive: true,
       },
       {
-        id: "3",
         fromZone: "DELHI",
         toZone: "CHENNAI",
-        rate: 180,
-        transitDays: 5,
         isActive: true,
       },
     ],
+    distanceBuckets: [],
     fuelSurcharge: {
       percentage: 5,
       minAmount: 10,
@@ -149,22 +141,17 @@ export const mockRateRules: RateRule[] = [
     ],
     zones: [
       {
-        id: "1",
         fromZone: "DELHI",
         toZone: "MUMBAI",
-        rate: 200,
-        transitDays: 1,
         isActive: true,
       },
       {
-        id: "2",
         fromZone: "DELHI",
         toZone: "BANGALORE",
-        rate: 250,
-        transitDays: 1,
         isActive: true,
       },
     ],
+    distanceBuckets: [],
     fuelSurcharge: {
       percentage: 8,
       minAmount: 15,
@@ -229,22 +216,17 @@ export const mockRateRules: RateRule[] = [
     ],
     zones: [
       {
-        id: "1",
         fromZone: "DELHI",
         toZone: "MUMBAI",
-        rate: 15,
-        transitDays: 4,
         isActive: true,
       },
       {
-        id: "2",
         fromZone: "DELHI",
         toZone: "BANGALORE",
-        rate: 18,
-        transitDays: 5,
         isActive: true,
       },
     ],
+    distanceBuckets: [],
     fuelSurcharge: {
       percentage: 4,
       minAmount: 8,
@@ -301,14 +283,12 @@ export const mockRateRules: RateRule[] = [
     ],
     zones: [
       {
-        id: "1",
         fromZone: "DELHI",
         toZone: "MUMBAI",
-        rate: 110,
-        transitDays: 3,
         isActive: true,
       },
     ],
+    distanceBuckets: [],
     fuelSurcharge: {
       percentage: 4,
       minAmount: 8,

@@ -2,6 +2,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import {
   X,
   Calculator,
@@ -28,7 +30,6 @@ import { Switch } from "@/components/ui/switch";
 import {
   RateRule,
   FreightCalculationInput,
-  FreightCalculationResult,
 } from "./types";
 import { zonesList } from "./mockData";
 
@@ -55,8 +56,9 @@ const FreightCalculator = ({ onClose, rates }: FreightCalculatorProps) => {
     },
   });
 
-  const [result, setResult] = useState<FreightCalculationResult | null>(null);
+  const [result, setResult] = useState<any | null>(null);
   const [matchedRules, setMatchedRules] = useState<RateRule[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // Available zones from rates
   const availableZones = zonesList;
@@ -65,7 +67,7 @@ const FreightCalculator = ({ onClose, rates }: FreightCalculatorProps) => {
   useEffect(() => {
     const matched = rates.filter((rate) => {
       // Check if rate is active and valid
-      if (!rate.isActive || new Date(rate.validTo) < new Date()) return false;
+      if (!rate.isActive || (rate.validTo && new Date(rate.validTo) < new Date())) return false;
 
       // Check service type
       if (
@@ -74,12 +76,9 @@ const FreightCalculator = ({ onClose, rates }: FreightCalculatorProps) => {
       )
         return false;
 
-      // Check customer type (for calculation we use first matching rule)
-      // In real app, you would filter by actual customer type
-
       // Check if there's a zone match
-      const hasZoneMatch = rate.zones.some(
-        (zone) =>
+      const hasZoneMatch = rate.zones?.some(
+        (zone: any) =>
           zone.fromZone === formData.originZone &&
           zone.toZone === formData.destinationZone &&
           zone.isActive
@@ -94,200 +93,43 @@ const FreightCalculator = ({ onClose, rates }: FreightCalculatorProps) => {
 
     // Auto-calculate if we have matching rules
     if (matched.length > 0) {
-      calculateFreight(matched[0]); // Use first matching rule
+      calculateFreight(matched[0]);
     } else {
       setResult(null);
     }
   }, [formData, rates]);
 
-  const calculateFreight = (rule?: RateRule) => {
+  const calculateFreight = async (rule?: RateRule) => {
     const rateRule = rule || matchedRules[0];
     if (!rateRule) return;
 
-    const weight = formData.weight;
-    const declaredValue = formData.declaredValue || 0;
-
-    // Find matching slab
-    const slab = rateRule.slabs.find(
-      (s) => weight >= s.minWeight && weight <= s.maxWeight
-    );
-    if (!slab) return;
-
-    // Find zone rate
-    const zone = rateRule.zones.find(
-      (z) =>
-        z.fromZone === formData.originZone &&
-        z.toZone === formData.destinationZone
-    );
-    if (!zone) return;
-
-    // Calculate base freight
-    let baseFreight = 0;
-    if (slab.rateType === "FIXED") {
-      baseFreight = slab.rate;
-    } else if (slab.rateType === "PER_KG") {
-      baseFreight = slab.rate * weight;
-    }
-
-    // Add zone rate
-    baseFreight += zone.rate;
-
-    // Calculate fuel surcharge
-    let fuelSurcharge = baseFreight * (rateRule.fuelSurcharge.percentage / 100);
-    fuelSurcharge = Math.max(fuelSurcharge, rateRule.fuelSurcharge.minAmount);
-    if (rateRule.fuelSurcharge.maxAmount) {
-      fuelSurcharge = Math.min(fuelSurcharge, rateRule.fuelSurcharge.maxAmount);
-    }
-
-    // Calculate FOV charge
-    let fovCharge = declaredValue * (rateRule.fovCharge.percentage / 100);
-    fovCharge = Math.max(fovCharge, rateRule.fovCharge.minAmount);
-    if (rateRule.fovCharge.maxAmount) {
-      fovCharge = Math.min(fovCharge, rateRule.fovCharge.maxAmount);
-    }
-
-    // Calculate COD charges
-    let codCharges = 0;
-    if (formData.paymentMode === "COD") {
-      codCharges = declaredValue * (rateRule.codCharges.percentage / 100);
-      codCharges = Math.max(codCharges, rateRule.codCharges.minAmount);
-      if (rateRule.codCharges.fixedCharge) {
-        codCharges = Math.max(codCharges, rateRule.codCharges.fixedCharge);
-      }
-    }
-
-    // Calculate additional charges
-    let additionalCharges = 0;
-    const additionalBreakdown: {
-      item: string;
-      amount: number;
-      description: string;
-    }[] = [];
-
-    // ODA charge
-    if (formData.isODA) {
-      const odaCharge = rateRule.additionalCharges.find(
-        (c) => c.name === "ODA Charge"
-      );
-      if (odaCharge) {
-        const amount =
-          odaCharge.type === "FIXED"
-            ? odaCharge.value
-            : baseFreight * (odaCharge.value / 100);
-        additionalCharges += amount;
-        additionalBreakdown.push({
-          item: odaCharge.name,
-          amount,
-          description: odaCharge.description,
-        });
-      }
-    }
-
-    // Sunday/Holiday charge
-    if (formData.isSundayHoliday) {
-      const holidayCharge = rateRule.additionalCharges.find(
-        (c) => c.name.includes("Sunday") || c.name.includes("Holiday")
-      );
-      if (holidayCharge) {
-        const amount =
-          holidayCharge.type === "FIXED"
-            ? holidayCharge.value
-            : baseFreight * (holidayCharge.value / 100);
-        additionalCharges += amount;
-        additionalBreakdown.push({
-          item: holidayCharge.name,
-          amount,
-          description: holidayCharge.description,
-        });
-      }
-    }
-
-    // Special handling charge
-    if (formData.isSpecialHandling) {
-      const specialCharge = rateRule.additionalCharges.find((c) =>
-        c.name.includes("Special")
-      );
-      if (specialCharge) {
-        const amount =
-          specialCharge.type === "FIXED"
-            ? specialCharge.value
-            : baseFreight * (specialCharge.value / 100);
-        additionalCharges += amount;
-        additionalBreakdown.push({
-          item: specialCharge.name,
-          amount,
-          description: specialCharge.description,
-        });
-      }
-    }
-
-    // Calculate total
-    let totalFreight =
-      baseFreight + fuelSurcharge + fovCharge + codCharges + additionalCharges;
-
-    // Apply minimum charge
-    if (
-      totalFreight < rateRule.minCharge.amount &&
-      (rateRule.minCharge.applicableZones.includes("ALL") ||
-        rateRule.minCharge.applicableZones.includes(formData.destinationZone))
-    ) {
-      totalFreight = rateRule.minCharge.amount;
-    }
-
-    // Apply rounding
-    if (rateRule.autoCalculate.enabled) {
-      if (rateRule.autoCalculate.rounding === "UP") {
-        totalFreight =
-          Math.ceil(totalFreight / rateRule.autoCalculate.roundingFactor) *
-          rateRule.autoCalculate.roundingFactor;
-      } else if (rateRule.autoCalculate.rounding === "DOWN") {
-        totalFreight =
-          Math.floor(totalFreight / rateRule.autoCalculate.roundingFactor) *
-          rateRule.autoCalculate.roundingFactor;
-      } else if (rateRule.autoCalculate.rounding === "NEAREST") {
-        totalFreight =
-          Math.round(totalFreight / rateRule.autoCalculate.roundingFactor) *
-          rateRule.autoCalculate.roundingFactor;
-      }
-    }
-
-    const breakdown = [
-      {
-        item: "Base Freight",
-        amount: baseFreight,
-        description: `Weight: ${weight}kg, Zone: ${formData.originZone} → ${formData.destinationZone}`,
-      },
-      {
-        item: "Fuel Surcharge",
-        amount: fuelSurcharge,
-        description: `${rateRule.fuelSurcharge.percentage}% of base freight`,
-      },
-      {
-        item: "FOV Charge",
-        amount: fovCharge,
-        description: `${rateRule.fovCharge.percentage}% of declared value (₹${declaredValue})`,
-      },
-      ...additionalBreakdown,
-    ];
-
-    if (codCharges > 0) {
-      breakdown.push({
-        item: "COD Charges",
-        amount: codCharges,
-        description: `${rateRule.codCharges.percentage}% of COD amount`,
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const { data } = await axios.post("/api/rates/calculate", {
+        originZone: formData.originZone,
+        destinationZone: formData.destinationZone,
+        weight: formData.weight,
+        length: formData.dimensions?.length,
+        width: formData.dimensions?.width,
+        height: formData.dimensions?.height,
+        rateCardId: rateRule.id || (rateRule as any)._id,
+        declaredValue: formData.declaredValue,
+        isODA: formData.isODA
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-    }
 
-    setResult({
-      baseFreight,
-      fuelSurcharge,
-      fovCharge,
-      codCharges,
-      additionalCharges,
-      totalFreight,
-      breakdown,
-      appliedRule: rateRule,
-    });
+      setResult({
+        ...data,
+        appliedRule: rateRule
+      });
+    } catch (error) {
+      console.error("Calculation failed:", error);
+      toast.error("Failed to calculate freight");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -301,7 +143,7 @@ const FreightCalculator = ({ onClose, rates }: FreightCalculatorProps) => {
             <div>
               <CardTitle>Freight Calculator</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Calculate shipment charges based on rate rules
+                Calculate shipment charges based on real-time rate rules
               </p>
             </div>
           </div>
@@ -436,37 +278,7 @@ const FreightCalculator = ({ onClose, rates }: FreightCalculatorProps) => {
                 <div>
                   <Label>Out of Delivery Area (ODA)</Label>
                   <p className="text-xs text-muted-foreground">
-                    Additional charges apply
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={formData.isSundayHoliday}
-                  onCheckedChange={(v) =>
-                    setFormData({ ...formData, isSundayHoliday: v })
-                  }
-                />
-                <div>
-                  <Label>Sunday/Holiday Delivery</Label>
-                  <p className="text-xs text-muted-foreground">
-                    25% extra charges
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <Switch
-                  checked={formData.isSpecialHandling}
-                  onCheckedChange={(v) =>
-                    setFormData({ ...formData, isSpecialHandling: v })
-                  }
-                />
-                <div>
-                  <Label>Special Handling</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Fragile/Perishable items
+                    Calculates ODA surcharge
                   </p>
                 </div>
               </div>
@@ -480,23 +292,21 @@ const FreightCalculator = ({ onClose, rates }: FreightCalculatorProps) => {
                   <div className="p-4 border rounded-lg bg-yellow-50 text-yellow-800">
                     <div className="flex items-center gap-2">
                       <AlertCircle className="h-4 w-4" />
-                      <span>No matching rate rules found</span>
+                      <span>No matching rate rules found for this route</span>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-2">
                     {matchedRules.map((rule, index) => (
                       <Card
-                        key={rule.id}
-                        className={`border ${
-                          index === 0 ? "border-primary" : ""
-                        }`}
+                        key={rule.id || (rule as any)._id}
+                        className={`border ${result?.appliedRule?.id === rule.id ? "border-primary bg-primary/5" : ""}`}
                       >
                         <CardContent className="p-3">
                           <div className="flex items-center justify-between">
                             <div>
                               <div className="flex items-center gap-2">
-                                {index === 0 && (
+                                {result?.appliedRule?.id === rule.id && (
                                   <Badge variant="default" className="gap-1">
                                     <CheckCircle2 className="h-3 w-3" />
                                     Applied
@@ -505,19 +315,17 @@ const FreightCalculator = ({ onClose, rates }: FreightCalculatorProps) => {
                                 <span className="font-medium">{rule.name}</span>
                               </div>
                               <div className="text-sm text-muted-foreground">
-                                {rule.customerType} • {rule.serviceType} •{" "}
-                                {rule.paymentMode}
+                                {rule.serviceType} • {rule.paymentMode}
                               </div>
                             </div>
-                            {index !== 0 && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => calculateFreight(rule)}
-                              >
-                                Use This Rule
-                              </Button>
-                            )}
+                            <Button
+                              size="sm"
+                              variant={result?.appliedRule?.id === rule.id ? "secondary" : "outline"}
+                              disabled={loading}
+                              onClick={() => calculateFreight(rule)}
+                            >
+                              {loading ? "Calculating..." : "Select & Calculate"}
+                            </Button>
                           </div>
                         </CardContent>
                       </Card>
@@ -529,85 +337,58 @@ const FreightCalculator = ({ onClose, rates }: FreightCalculatorProps) => {
 
             {/* Results */}
             {result && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
+              <div className="space-y-4 animate-in fade-in slide-in-from-top-4">
+                <div className="flex items-center justify-between border-t pt-4">
                   <h3 className="text-lg font-semibold">Calculation Results</h3>
                   <div className="text-2xl font-bold text-primary">
-                    ₹{result.totalFreight.toFixed(2)}
+                    ₹{result.totalAmount.toFixed(2)}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Card>
                     <CardContent className="p-4">
-                      <h4 className="font-medium mb-3">Breakdown</h4>
+                      <h4 className="font-medium mb-3 flex items-center gap-2">
+                        <IndianRupee className="h-4 w-4" />
+                        Charge Breakdown
+                      </h4>
                       <div className="space-y-3">
-                        {result.breakdown.map((item, index) => (
-                          <div key={index} className="flex justify-between">
-                            <div>
-                              <div className="font-medium">{item.item}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {item.description}
-                              </div>
-                            </div>
-                            <div className="font-medium">
-                              ₹{item.amount.toFixed(2)}
-                            </div>
+                        {result.breakdown.map((item: any, index: number) => (
+                          <div key={index} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{item.label}</span>
+                            <span className="font-medium">₹{item.value.toFixed(2)}</span>
                           </div>
                         ))}
+                        <div className="border-t pt-2 flex justify-between font-bold">
+                          <span>Total Amount</span>
+                          <span>₹{result.totalAmount.toFixed(2)}</span>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
 
                   <Card>
                     <CardContent className="p-4">
-                      <h4 className="font-medium mb-3">Applied Rule Details</h4>
+                      <h4 className="font-medium mb-3 flex items-center gap-2">
+                        <Package className="h-4 w-4" />
+                        Shipment Details
+                      </h4>
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            Rule Name:
-                          </span>
-                          <span className="font-medium">
-                            {result.appliedRule.name}
-                          </span>
+                          <span className="text-muted-foreground">Chargeable Weight:</span>
+                          <span className="font-medium">{result.chargeableWeight.toFixed(2)} kg</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            Customer Type:
-                          </span>
-                          <Badge variant="outline">
-                            {result.appliedRule.customerType}
-                          </Badge>
+                          <span className="text-muted-foreground">Volumetric Weight:</span>
+                          <span className="font-medium">{result.volumetricWeight.toFixed(2)} kg</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            Service Type:
-                          </span>
-                          <Badge variant="outline">
-                            {result.appliedRule.serviceType}
-                          </Badge>
+                          <span className="text-muted-foreground">Applied Rule:</span>
+                          <span className="font-medium">{result.appliedRule.name}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            Fuel Surcharge:
-                          </span>
-                          <span>
-                            {result.appliedRule.fuelSurcharge.percentage}%
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            FOV Charge:
-                          </span>
-                          <span>
-                            {result.appliedRule.fovCharge.percentage}%
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">
-                            Minimum Charge:
-                          </span>
-                          <span>₹{result.appliedRule.minCharge.amount}</span>
+                          <span className="text-muted-foreground">Min Charge Applied:</span>
+                          <span className="font-medium">{result.baseFreight === result.appliedRule.minCharge.amount ? "Yes" : "No"}</span>
                         </div>
                       </div>
                     </CardContent>
@@ -629,10 +410,11 @@ const FreightCalculator = ({ onClose, rates }: FreightCalculatorProps) => {
               <Button
                 type="button"
                 className="flex-1 gap-2"
+                disabled={loading || matchedRules.length === 0}
                 onClick={() => calculateFreight()}
               >
                 <Calculator className="h-4 w-4" />
-                Recalculate
+                {loading ? "Processing..." : "Recalculate"}
               </Button>
             </div>
           </div>

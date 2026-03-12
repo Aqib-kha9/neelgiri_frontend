@@ -24,7 +24,19 @@ const RatesManagement = () => {
             const { data } = await axios.get("/api/rates", {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            setRates(data || []);
+            const normalizedData = (data || []).map((rate: any) => ({
+                ...rate,
+                id: rate.id || rate._id,
+                slabs: (rate.slabs || []).map((s: any) => ({ ...s, id: s.id || s._id })),
+                distanceBuckets: (rate.distanceBuckets || []).map((db: any) => ({ ...db, id: db.id || db._id })),
+                additionalCharges: rate.additionalCharges || [],
+                minCharge: rate.minCharge || { amount: 0, applicableZones: [] },
+                fuelSurcharge: rate.fuelSurcharge || { percentage: 0, minAmount: 0, maxAmount: 0 },
+                fovCharge: rate.fovCharge || { percentage: 0, minAmount: 0, maxAmount: 0 },
+                restrictions: rate.restrictions || { minWeight: 0, maxWeight: 0, allowedPackaging: [], prohibitedItems: [] },
+                autoCalculate: rate.autoCalculate || { enabled: false, baseOn: 'weight', rounding: 'none', roundingFactor: 1 }
+            }));
+            setRates(normalizedData);
         } catch (error) {
             toast.error("Failed to load rates");
             console.error(error);
@@ -63,8 +75,8 @@ const RatesManagement = () => {
             // Search filter
             const searchMatch =
                 searchTerm === "" ||
-                rate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                rate.id.toLowerCase().includes(searchTerm.toLowerCase());
+                (rate.name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (rate.id?.toLowerCase().includes(searchTerm.toLowerCase()));
 
             // Customer type filter
             const customerMatch =
@@ -95,7 +107,7 @@ const RatesManagement = () => {
                 statusMatch
             );
         });
-    }, [searchTerm, customerType, serviceType, paymentMode, statusFilter]);
+    }, [searchTerm, customerType, serviceType, paymentMode, statusFilter, rates]);
 
     const toggleExpand = (rateId: string) => {
         setExpandedRates((prev) =>

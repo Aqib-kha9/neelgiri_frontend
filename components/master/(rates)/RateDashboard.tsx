@@ -649,22 +649,22 @@ const RateDashboard = () => {
                           Zone Rates
                         </h4>
                         <div className="space-y-2">
-                          {rate.zones.slice(0, 3).map((zone) => (
+                          {(rate.zones ?? []).slice(0, 3).map((zone) => (
                             <div
-                              key={zone.id}
+                              key={`${zone.fromZone}-${zone.toZone}`}
                               className="flex justify-between text-sm"
                             >
                               <span className="text-muted-foreground">
                                 {zone.fromZone} → {zone.toZone}:
                               </span>
                               <span className="font-medium">
-                                ₹{zone.rate} ({zone.transitDays} days)
+                                {zone.rate != null ? `₹${zone.rate}` : 'N/A'}{zone.transitDays != null ? ` (${zone.transitDays} days)` : ''}
                               </span>
                             </div>
                           ))}
-                          {rate.zones.length > 3 && (
+                          {(rate.zones?.length ?? 0) > 3 && (
                             <div className="text-xs text-muted-foreground">
-                              +{rate.zones.length - 3} more zones...
+                              +{(rate.zones?.length ?? 0) - 3} more zones...
                             </div>
                           )}
                         </div>

@@ -13,7 +13,7 @@ import {
   ChevronUp,
   Calculator,
   Package,
-  Map,
+
   Percent,
   IndianRupee,
   Calendar,
@@ -41,7 +41,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { RateRule, SlabRate, ZoneRate, AdditionalCharge } from "./types";
+import { RateRule, SlabRate, AdditionalCharge } from "./types";
 
 interface RateFormProps {
   onClose: () => void;
@@ -83,24 +83,7 @@ const RateForm = ({ onClose, initialData }: RateFormProps) => {
         rateType: "PER_KG",
       },
     ],
-    zones: initialData?.zones || [
-      {
-        id: "1",
-        fromZone: "DELHI",
-        toZone: "MUMBAI",
-        rate: 120,
-        transitDays: 3,
-        isActive: true,
-      },
-      {
-        id: "2",
-        fromZone: "DELHI",
-        toZone: "BANGALORE",
-        rate: 150,
-        transitDays: 4,
-        isActive: true,
-      },
-    ],
+
     fuelSurcharge: initialData?.fuelSurcharge || {
       percentage: 5,
       minAmount: 10,
@@ -160,6 +143,18 @@ const RateForm = ({ onClose, initialData }: RateFormProps) => {
       prohibitedItems: ["LIQUIDS", "EXPLOSIVES", "WEAPONS"],
       specialInstructions: "Handle with care",
     },
+    distanceBuckets: initialData?.distanceBuckets || [
+      {
+        id: "1",
+        name: "LOCAL (0-50km)",
+        minDistance: 0,
+        maxDistance: 50,
+        baseWeight: 0.5,
+        baseRate: 40,
+        additionalWeight: 0.5,
+        additionalRate: 15,
+      },
+    ],
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -175,7 +170,6 @@ const RateForm = ({ onClose, initialData }: RateFormProps) => {
         serviceType: formData.serviceType,
         paymentMode: formData.paymentMode,
         slabs: formData.slabs,
-        zones: formData.zones,
         fuelSurcharge: formData.fuelSurcharge,
         fovCharge: formData.fovCharge,
         codCharges: formData.codCharges,
@@ -188,7 +182,8 @@ const RateForm = ({ onClose, initialData }: RateFormProps) => {
         validTo: formData.validTo,
         isActive: formData.isActive,
         autoCalculate: formData.autoCalculate,
-        restrictions: formData.restrictions
+        restrictions: formData.restrictions,
+        distanceBuckets: formData.distanceBuckets,
       };
 
       if (isNew) {
@@ -236,31 +231,7 @@ const RateForm = ({ onClose, initialData }: RateFormProps) => {
     setFormData({ ...formData, slabs: updatedSlabs });
   };
 
-  const addZone = () => {
-    const newZone: ZoneRate = {
-      id: `zone-${Date.now()}`,
-      fromZone: "",
-      toZone: "",
-      rate: 0,
-      transitDays: 3,
-      isActive: true,
-    };
-    setFormData({
-      ...formData,
-      zones: [...(formData.zones || []), newZone],
-    });
-  };
 
-  const updateZone = (index: number, field: keyof ZoneRate, value: any) => {
-    const updatedZones = [...(formData.zones || [])];
-    updatedZones[index] = { ...updatedZones[index], [field]: value };
-    setFormData({ ...formData, zones: updatedZones });
-  };
-
-  const removeZone = (index: number) => {
-    const updatedZones = (formData.zones || []).filter((_, i) => i !== index);
-    setFormData({ ...formData, zones: updatedZones });
-  };
 
   const addAdditionalCharge = () => {
     const newCharge: AdditionalCharge = {
@@ -293,6 +264,34 @@ const RateForm = ({ onClose, initialData }: RateFormProps) => {
     setFormData({ ...formData, additionalCharges: updatedCharges });
   };
 
+  const addDistanceBucket = () => {
+    const newBucket = {
+      id: `dist-${Date.now()}`,
+      name: "",
+      minDistance: 0,
+      maxDistance: 0,
+      baseWeight: 0.5,
+      baseRate: 0,
+      additionalWeight: 0.5,
+      additionalRate: 0,
+    };
+    setFormData({
+      ...formData,
+      distanceBuckets: [...(formData.distanceBuckets || []), newBucket],
+    });
+  };
+
+  const updateDistanceBucket = (index: number, field: any, value: any) => {
+    const updatedBuckets = [...(formData.distanceBuckets || [])];
+    updatedBuckets[index] = { ...updatedBuckets[index], [field]: value };
+    setFormData({ ...formData, distanceBuckets: updatedBuckets });
+  };
+
+  const removeDistanceBucket = (index: number) => {
+    const updatedBuckets = (formData.distanceBuckets || []).filter((_, i) => i !== index);
+    setFormData({ ...formData, distanceBuckets: updatedBuckets });
+  };
+
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-start justify-center z-50 p-4 overflow-y-auto">
       <Card className="w-full max-w-6xl my-8 rounded-2xl border-border/70 shadow-lg">
@@ -316,7 +315,7 @@ const RateForm = ({ onClose, initialData }: RateFormProps) => {
               <TabsList className="grid grid-cols-5 mb-6">
                 <TabsTrigger value="basic">Basic Info</TabsTrigger>
                 <TabsTrigger value="slabs">Weight Slabs</TabsTrigger>
-                <TabsTrigger value="zones">Zone Matrix</TabsTrigger>
+                <TabsTrigger value="tiers">Industry Tiers</TabsTrigger>
                 <TabsTrigger value="charges">Charges</TabsTrigger>
                 <TabsTrigger value="restrictions">Restrictions</TabsTrigger>
               </TabsList>
@@ -600,105 +599,126 @@ const RateForm = ({ onClose, initialData }: RateFormProps) => {
                 </div>
               </TabsContent>
 
-              {/* Zone Matrix Tab */}
-              <TabsContent value="zones" className="space-y-6">
+              {/* Industry Tiers Tab (Distance Based) */}
+              <TabsContent value="tiers" className="space-y-6">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold">Zone-wise Rates</h3>
+                  <div>
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <Calculator className="h-5 w-5 text-primary" />
+                      Production Industry Tiers
+                    </h3>
+                    <p className="text-sm text-muted-foreground">Shiprocket-grade Distance Based Pricing (Local, Regional, National)</p>
+                  </div>
                   <Button
                     type="button"
-                    onClick={addZone}
+                    onClick={addDistanceBucket}
                     size="sm"
                     className="gap-2"
                   >
                     <Plus className="h-4 w-4" />
-                    Add Zone
+                    Add Tier
                   </Button>
                 </div>
 
-                <div className="space-y-4">
-                  {formData.zones?.map((zone, index) => (
-                    <Card key={zone.id} className="border">
+                <div className="grid grid-cols-1 gap-4">
+                  {formData.distanceBuckets?.map((bucket, index) => (
+                    <Card key={bucket.id} className="border-primary/20 bg-primary/5">
                       <CardContent className="p-4">
                         <div className="flex justify-between items-start mb-4">
-                          <div className="flex items-center gap-3">
-                            <Map className="h-5 w-5 text-green-500" />
-                            <h4 className="font-medium">
-                              Zone Pair {index + 1}
-                            </h4>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={zone.isActive}
-                              onCheckedChange={(v) =>
-                                updateZone(index, "isActive", v)
-                              }
-                            />
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeZone(index)}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
+                          <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                              <Label>Tier Name</Label>
+                              <Input
+                                value={bucket.name}
+                                onChange={(e) => updateDistanceBucket(index, 'name', e.target.value)}
+                                placeholder="e.g. REGIONAL (200-500km)"
+                              />
+                            </div>
+                            <div>
+                              <Label>Min Dist (km)</Label>
+                              <Input
+                                type="number"
+                                value={bucket.minDistance}
+                                onChange={(e) => updateDistanceBucket(index, 'minDistance', parseFloat(e.target.value))}
+                              />
+                            </div>
+                            <div>
+                              <Label>Max Dist (km)</Label>
+                              <Input
+                                type="number"
+                                value={bucket.maxDistance}
+                                onChange={(e) => updateDistanceBucket(index, 'maxDistance', parseFloat(e.target.value))}
+                                placeholder="0 = Unlimited"
+                              />
+                            </div>
+                            <div className="flex items-end">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeDistanceBucket(index)}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                          <div>
-                            <Label>From Zone</Label>
-                            <Input
-                              value={zone.fromZone}
-                              onChange={(e) =>
-                                updateZone(index, "fromZone", e.target.value)
-                              }
-                              placeholder="e.g., DELHI"
-                            />
-                          </div>
-                          <div>
-                            <Label>To Zone</Label>
-                            <Input
-                              value={zone.toZone}
-                              onChange={(e) =>
-                                updateZone(index, "toZone", e.target.value)
-                              }
-                              placeholder="e.g., MUMBAI"
-                            />
-                          </div>
-                          <div>
-                            <Label>Rate (₹)</Label>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2 border-t border-primary/10">
+                          <div className="bg-background p-2 rounded-md border">
+                            <Label className="text-xs text-primary">Base Weight (kg)</Label>
                             <Input
                               type="number"
-                              value={zone.rate}
-                              onChange={(e) =>
-                                updateZone(
-                                  index,
-                                  "rate",
-                                  parseFloat(e.target.value)
-                                )
-                              }
+                              step="0.1"
+                              className="h-8"
+                              value={bucket.baseWeight}
+                              onChange={(e) => updateDistanceBucket(index, 'baseWeight', parseFloat(e.target.value))}
                             />
                           </div>
-                          <div>
-                            <Label>Transit Days</Label>
+                          <div className="bg-background p-2 rounded-md border">
+                            <Label className="text-xs text-primary">Base Rate (₹)</Label>
                             <Input
                               type="number"
-                              value={zone.transitDays}
-                              onChange={(e) =>
-                                updateZone(
-                                  index,
-                                  "transitDays",
-                                  parseInt(e.target.value)
-                                )
-                              }
+                              className="h-8"
+                              value={bucket.baseRate}
+                              onChange={(e) => updateDistanceBucket(index, 'baseRate', parseFloat(e.target.value))}
+                            />
+                          </div>
+                          <div className="bg-background p-2 rounded-md border">
+                            <Label className="text-xs text-muted-foreground">Addl. Weight (kg)</Label>
+                            <Input
+                              type="number"
+                              step="0.1"
+                              className="h-8"
+                              value={bucket.additionalWeight}
+                              onChange={(e) => updateDistanceBucket(index, 'additionalWeight', parseFloat(e.target.value))}
+                            />
+                          </div>
+                          <div className="bg-background p-2 rounded-md border">
+                            <Label className="text-xs text-muted-foreground">Addl. Rate (₹)</Label>
+                            <Input
+                              type="number"
+                              className="h-8"
+                              value={bucket.additionalRate}
+                              onChange={(e) => updateDistanceBucket(index, 'additionalRate', parseFloat(e.target.value))}
                             />
                           </div>
                         </div>
                       </CardContent>
                     </Card>
                   ))}
+                  {formData.distanceBuckets?.length === 0 && (
+                    <div className="text-center p-8 border-2 border-dashed rounded-xl bg-muted/20">
+                      <Calculator className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
+                      <p className="font-medium">No Industry Tiers Configured</p>
+                      <p className="text-sm text-muted-foreground">Add tiers for distance-based pricing.</p>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
+
+
 
               {/* Charges Tab */}
               <TabsContent value="charges" className="space-y-6">

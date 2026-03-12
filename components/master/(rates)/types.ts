@@ -13,11 +13,21 @@ export interface RateRule {
   volumetricDivisor?: number; // e.g., 5000 for Air, 6000 for Surface (CFT)
   odaCharge?: number; // Flat surcharge for ODA areas
 
+  zones?: {
+    fromZone: string;
+    toZone: string;
+    isActive: boolean;
+    rate?: number;
+    transitDays?: number;
+  }[];
+
   // Slab-wise rates
   slabs: SlabRate[];
 
-  // Zone matrix
-  zones: ZoneRate[];
+
+
+  // Distance Buckets (Shiprocket model)
+  distanceBuckets: DistanceBucket[];
 
   // Additional charges
   fuelSurcharge: {
@@ -42,7 +52,7 @@ export interface RateRule {
 
   minCharge: {
     amount: number;
-    applicableZones: string[]; // zone codes
+    applicableZones: string[]; // e.g. ["LOCAL", "NCR"]
   };
 
   additionalCharges: AdditionalCharge[];
@@ -85,14 +95,7 @@ export interface SlabRate {
   description?: string;
 }
 
-export interface ZoneRate {
-  id: string;
-  fromZone: string;
-  toZone: string;
-  rate: number;
-  transitDays: number;
-  isActive: boolean;
-}
+
 
 export interface AdditionalCharge {
   id: string;
@@ -105,6 +108,17 @@ export interface AdditionalCharge {
     value: any;
   };
   description: string;
+}
+
+export interface DistanceBucket {
+  id: string;
+  name: string;
+  minDistance: number;
+  maxDistance: number;
+  baseWeight: number;
+  baseRate: number;
+  additionalWeight: number;
+  additionalRate: number;
 }
 
 export interface FreightCalculationInput {

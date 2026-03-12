@@ -172,20 +172,20 @@ const RatesList = ({
                                     <div className="grid grid-cols-2 gap-x-6 gap-y-2">
                                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap" title="Slabs Configured">
                                             <Package className="h-3.5 w-3.5 text-primary/70 shrink-0" />
-                                            <span className="font-medium text-foreground">{rate.slabs.length} Slabs</span>
+                                            <span className="font-medium text-foreground">{rate.slabs?.length || 0} Slabs</span>
                                         </div>
                                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap" title="Zones Configured">
                                             <Map className="h-3.5 w-3.5 text-green-600/70 shrink-0" />
-                                            <span>{rate.zones.length} Zones</span>
+                                            <span>{rate.zones?.length || 0} Zones</span>
                                         </div>
                                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap" title="Min Charge">
                                             <TrendingUp className="h-3.5 w-3.5 text-orange-500/70 shrink-0" />
-                                            <span className="font-medium text-foreground">Min ₹{rate.minCharge.amount}</span>
+                                            <span className="font-medium text-foreground">Min ₹{rate.minCharge?.amount || 0}</span>
                                         </div>
-                                        {rate.additionalCharges.length > 0 && (
+                                        {(rate.additionalCharges?.length || 0) > 0 && (
                                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground whitespace-nowrap" title="Additional Charges">
                                                 <Percent className="h-3.5 w-3.5 text-purple-500/70 shrink-0" />
-                                                <span>{rate.additionalCharges.length} Extras</span>
+                                                <span>{rate.additionalCharges?.length} Extras</span>
                                             </div>
                                         )}
                                     </div>
@@ -194,11 +194,11 @@ const RatesList = ({
                                     <div className="flex flex-col gap-1.5">
                                         <div className="flex items-center gap-2 text-xs">
                                             <span className="text-muted-foreground">From:</span>
-                                            <span className="font-medium font-mono">{new Date(rate.validFrom).toLocaleDateString("en-IN")}</span>
+                                            <span className="font-medium font-mono">{rate.validFrom ? new Date(rate.validFrom).toLocaleDateString("en-IN") : 'N/A'}</span>
                                         </div>
                                         <div className="flex items-center gap-2 text-xs">
                                             <span className="text-muted-foreground w-[30px]">To:</span>
-                                            <span className="font-medium font-mono">{new Date(rate.validTo).toLocaleDateString("en-IN")}</span>
+                                            <span className="font-medium font-mono">{rate.validTo ? new Date(rate.validTo).toLocaleDateString("en-IN") : 'N/A'}</span>
                                         </div>
                                     </div>
                                 </TableCell>

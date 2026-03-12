@@ -1,7 +1,4 @@
-
-import { Pincode } from "./types";
-
-export const mockPincodes: Pincode[] = [
+export const mockPincodes: any[] = [
   {
     id: "1",
     pincode: "400069",

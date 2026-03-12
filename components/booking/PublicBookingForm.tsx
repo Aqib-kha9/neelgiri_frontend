@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 import {
     User,
     MapPin,
@@ -52,6 +55,8 @@ const STEPS = [
 ];
 
 export default function PublicBookingForm() {
+    const { session } = useAuth();
+
     // Stage 0: Pincode Check, Stage 1: Booking Form
     const [isPincodeVerified, setIsPincodeVerified] = useState(false);
 
@@ -59,6 +64,10 @@ export default function PublicBookingForm() {
     const [currentStep, setCurrentStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [bookingSuccess, setBookingSuccess] = useState<null | string>(null);
+
+    // Pricing & Serviceability State
+    const [pincodeData, setPincodeData] = useState<{ pickup?: any; delivery?: any }>({});
+    const [calculatedRates, setCalculatedRates] = useState<any>(null);
 
     // Validation State
     const [validationError, setValidationError] = useState<string | null>(null);
@@ -112,16 +121,13 @@ export default function PublicBookingForm() {
         agreedToTerms: false
     });
 
-    // Mock Serviceable Pincodes (derived from mockData)
-    const serviceablePincodes = [
-        "400069", "110019", "560034", "600032", "500034",
-        "380009", "411001", "302001"
-    ];
-
     const checkServiceability = async (pincode: string) => {
-        // Mock API delay
-        await new Promise(resolve => setTimeout(resolve, 600));
-        return serviceablePincodes.includes(pincode);
+        try {
+            const { data } = await axios.get(`/api/pincodes/check/${pincode}`);
+            return data;
+        } catch (error) {
+            return null;
+        }
     };
 
     const handleInitialCheck = async () => {
@@ -139,31 +145,36 @@ export default function PublicBookingForm() {
         setIsValidating(true);
 
         try {
-            const [isPickupValid, isDeliveryValid] = await Promise.all([
+            const [pickupInfo, deliveryInfo] = await Promise.all([
                 checkServiceability(checkPincodes.pickup),
                 checkServiceability(checkPincodes.delivery)
             ]);
 
             setIsValidating(false);
 
-            if (!isPickupValid) {
+            if (!pickupInfo) {
                 setValidationError(`Sorry, Pickup Pincode ${checkPincodes.pickup} is not serviceable.`);
                 return;
             }
-            if (!isDeliveryValid) {
+            if (!deliveryInfo) {
                 setValidationError(`Sorry, Delivery Pincode ${checkPincodes.delivery} is not serviceable.`);
                 return;
             }
 
             // If valid, initialize form data and proceed
+            setPincodeData({ pickup: pickupInfo, delivery: deliveryInfo });
             setFormData(prev => ({
                 ...prev,
                 senderPincode: checkPincodes.pickup,
                 receiverPincode: checkPincodes.delivery,
-                senderCity: "", // Reset derived fields if we had real logic
-                senderState: "",
-                receiverCity: "",
-                receiverState: ""
+                senderCity: pickupInfo.city || pickupInfo.officeName || "",
+                senderState: pickupInfo.state || "",
+                receiverCity: deliveryInfo.city || deliveryInfo.officeName || "",
+                receiverState: deliveryInfo.state || "",
+                // Pre-fill sender info from session if available
+                senderName: session?.user?.name || prev.senderName,
+                senderPhone: session?.user?.phone || prev.senderPhone,
+                senderEmail: session?.user?.email || prev.senderEmail,
             }));
             setIsPincodeVerified(true);
 
@@ -189,20 +200,42 @@ export default function PublicBookingForm() {
         setCurrentStep(prev => Math.max(prev - 1, 1));
     };
 
+    const fetchPricing = async () => {
+        if (!formData.weight || !pincodeData.pickup || !pincodeData.delivery) return;
+
+        try {
+            const token = localStorage.getItem("token");
+            const { data } = await axios.post("/api/rates/calculate", {
+                originZone: pincodeData.pickup.zone || "NORTH",
+                destinationZone: pincodeData.delivery.zone || "NORTH",
+                weight: parseFloat(formData.weight),
+                length: parseFloat(formData.length || "0"),
+                width: parseFloat(formData.width || "0"),
+                height: parseFloat(formData.height || "0"),
+                rateCardId: (session?.user as any)?.rateCard,
+                declaredValue: parseFloat(formData.declaredValue || "0"),
+                isODA: pincodeData.delivery.isODA || false
+            }, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setCalculatedRates(data);
+        } catch (error) {
+            console.error("Pricing calculation failed:", error);
+        }
+    };
+
+    // Recalculate pricing when weight or dimensions or insurance changes
+    useEffect(() => {
+        if (isPincodeVerified && currentStep >= 3) {
+            fetchPricing();
+        }
+    }, [formData.weight, formData.length, formData.width, formData.height, formData.declaredValue, formData.wantsInsurance, currentStep]);
+
     const calculatePrice = () => {
-        const weight = parseFloat(formData.weight || "0");
-        const basePrice = 100;
-
-        // Volumetric check roughly (L*W*H)/5000
-        const volWeight = (parseFloat(formData.length || "0") * parseFloat(formData.width || "0") * parseFloat(formData.height || "0")) / 5000;
-        const chargeableWeight = Math.max(weight, volWeight);
-
-        let total = basePrice + (chargeableWeight * 50);
-
-        if (formData.serviceType === 'express') total *= 1.5;
-        if (formData.wantsInsurance) total += (parseFloat(formData.declaredValue || "0") * 0.01); // 1% insurance
-
-        return Math.round(total);
+        if (calculatedRates) {
+            return Math.round(calculatedRates.totalAmount);
+        }
+        return 0;
     };
 
     const handleSubmit = () => {
@@ -699,8 +732,9 @@ export default function PublicBookingForm() {
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                {/* Base calc for standard */}
-                                                <p className="font-bold">₹ {Math.round(100 + (parseFloat(formData.weight || "0") * 50) + (formData.wantsInsurance ? parseFloat(formData.declaredValue || "0") * 0.01 : 0))}</p>
+                                                <p className="font-bold">
+                                                    {calculatedRates ? `₹ ${Math.round(calculatedRates.totalAmount)}` : 'Calculating...'}
+                                                </p>
                                             </div>
                                         </div>
 
@@ -718,8 +752,9 @@ export default function PublicBookingForm() {
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                {/* 1.5x Multiplier for express */}
-                                                <p className="font-bold text-orange-700 dark:text-orange-400">₹ {Math.round((100 + (parseFloat(formData.weight || "0") * 50)) * 1.5 + (formData.wantsInsurance ? parseFloat(formData.declaredValue || "0") * 0.01 : 0))}</p>
+                                                <p className="font-bold text-orange-700 dark:text-orange-400">
+                                                    {calculatedRates ? `₹ ${Math.round(calculatedRates.totalAmount * 1.5)}` : 'Calculating...'}
+                                                </p>
                                             </div>
                                         </div>
                                     </div>

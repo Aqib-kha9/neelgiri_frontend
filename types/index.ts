@@ -25,14 +25,15 @@ export interface User {
   createdAt?: string;
   phone?: string;
   avatar?: string;
-  partnerName?: string; // Added for hierarchy context
-  branchName?: string;  // Added for hierarchy context
-  branchAdminName?: string; // Added for hierarchy context
-  creatorName?: string; // Added for context
-  city?: string; // Optional for users, common for customers
-  pincode?: string; // Optional for users
-  mobileNo?: string; // Optional for users
-  childrenBranches?: { // Added for Partner Hierarchy View
+  partnerName?: string;
+  branchName?: string;
+  branchAdminName?: string;
+  creatorName?: string;
+  city?: string;
+  pincode?: string;
+  mobileNo?: string;
+  customerType?: 'CUSTOMER' | 'AGENT' | 'VENDOR';
+  childrenBranches?: {
     id: string;
     name: string;
     code: string;
@@ -41,6 +42,13 @@ export interface User {
       email: string;
     } | null;
   }[];
+  address?: string;
+  customerId?: string;
+  receivers?: any[];
+  pickupLocations?: any[];
+  volumetricWeightDivisor?: number;
+  allowedServices?: string[];
+  billingType?: string;
 }
 
 export interface Tenant {
