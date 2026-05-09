@@ -1,9 +1,11 @@
 "use client";
 
-import { User, Phone, MapPin, CheckCircle2 } from "lucide-react";
+import { User, Phone, MapPin, CheckCircle2, Mail } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { GooglePlacesAutocomplete } from "./GooglePlacesAutocomplete";
 
 interface Step1SenderProps {
     formData: any;
@@ -18,109 +20,124 @@ export function Step1Sender({ formData, handleInputChange, session, selectSavedP
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
             {/* Quick Select Pickup Section */}
             {session?.user?.pickupLocations?.length > 0 && (
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between border-b border-border/60 pb-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                            <MapPin className="h-3 w-3" /> Frequent Pickup Points
-                        </Label>
-                        <span className="text-[9px] font-bold text-muted-foreground italic">Select to auto-fill</span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {session.user.pickupLocations.slice(0, 3).map((p: any) => {
-                            const isSelected = formData.senderPincode === p.pincode && formData.senderAddressLine1 === p.address;
-                            return (
-                                <Card 
-                                    key={p._id || p.id}
-                                    onClick={() => selectSavedPickup(p._id || p.id)}
-                                    className={`p-3 cursor-pointer transition-all border-2 flex items-center gap-3 relative overflow-hidden group ${
-                                        isSelected 
-                                        ? "border-primary bg-primary/5 ring-1 ring-primary/20 shadow-sm" 
-                                        : "border-border/60 bg-background hover:border-primary/40 hover:bg-muted/30"
-                                    }`}
-                                >
-                                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${isSelected ? "bg-primary text-white" : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"}`}>
-                                        <MapPin className="h-4 w-4" />
+                <div className="mb-6 p-4 rounded-lg bg-primary/5 border border-primary/20">
+                    <Label className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
+                        <MapPin className="h-4 w-4 text-primary" /> Saved Senders (Address Book)
+                    </Label>
+                    <Select onValueChange={(val) => selectSavedPickup(val)}>
+                        <SelectTrigger className="bg-background h-auto py-2">
+                            <SelectValue placeholder="Select a sender to auto-fill details..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {session.user.pickupLocations.map((p: any) => (
+                                <SelectItem key={p._id || p.id} value={p._id || p.id} className="py-2">
+                                    <div className="flex flex-col text-left items-start">
+                                        <span className="font-medium">{p.name} {p.contactPerson ? `(${p.contactPerson})` : ''}</span>
+                                        <span className="text-xs text-muted-foreground mt-0.5">{p.city}, {p.pincode} - {p.address}</span>
                                     </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-[11px] font-black truncate uppercase tracking-tight text-foreground">{p.name || 'Branch Point'}</p>
-                                        <p className="text-[9px] text-muted-foreground truncate font-bold">{p.city}, {p.pincode}</p>
-                                    </div>
-                                    {isSelected && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
-                                </Card>
-                            );
-                        })}
-                    </div>
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
-                {/* Sender Identity Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-2">
                 <div className="space-y-4">
-                    <div className="flex items-center gap-2 border-l-4 border-primary pl-3">
-                        <h3 className="text-sm font-black uppercase tracking-wider text-foreground">Sender Information</h3>
+                    <h3 className="text-sm font-semibold text-foreground border-b pb-2">Sender Information</h3>
+                    
+                    <div className="mb-2">
+                        <GooglePlacesAutocomplete 
+                            onSelect={(details) => {
+                                if (details.name) handleInputChange("senderName", details.name);
+                                if (details.phone) handleInputChange("senderPhone", details.phone);
+                                if (details.pincode) handleInputChange("senderPincode", details.pincode);
+                                if (details.city) handleInputChange("senderCity", details.city);
+                                if (details.state) handleInputChange("senderState", details.state);
+                                if (details.address) handleInputChange("senderAddressLine1", details.address);
+                            }} 
+                            label="Auto-fill from Google" 
+                            placeholder="Type business name..."
+                        />
                     </div>
-                    <div className="space-y-4 p-6 rounded-3xl border border-border/70 bg-muted/20">
+
+                    <div className="space-y-5">
                         <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 ml-1">Full Name or Entity *</Label>
+                            <Label className="text-sm">Full Name or Entity *</Label>
                             <div className="relative group">
-                                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 transition-colors group-focus-within:text-primary" />
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
-                                    placeholder="Deepanshu Logistics..."
-                                    className="h-11 pl-10 rounded-xl border-border/80 bg-background focus:ring-primary/20 font-bold"
+                                    placeholder="e.g. Deepanshu Logistics"
+                                    className="pl-9"
                                     value={formData.senderName}
                                     onChange={(e) => handleInputChange("senderName", e.target.value)}
                                 />
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 ml-1">Contact Number *</Label>
-                            <div className="relative group">
-                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 transition-colors group-focus-within:text-primary" />
-                                <Input
-                                    placeholder="10 digit mobile number"
-                                    className="h-11 pl-10 rounded-xl border-border/80 bg-background focus:ring-primary/20 font-bold"
-                                    type="tel"
-                                    maxLength={10}
-                                    value={formData.senderPhone}
-                                    onChange={(e) => handleInputChange("senderPhone", e.target.value.replace(/\D/g, ''))}
-                                />
+                        <div className="grid grid-cols-1 gap-4">
+                            <div className="space-y-2">
+                                <Label className="text-sm">Contact Number *</Label>
+                                <div className="relative group">
+                                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="10 digit mobile"
+                                        className="pl-9"
+                                        type="tel"
+                                        maxLength={10}
+                                        value={formData.senderPhone}
+                                        onChange={(e) => handleInputChange("senderPhone", e.target.value.replace(/\D/g, ''))}
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Pickup Address Section */}
                 <div className="space-y-4">
-                    <div className="flex items-center gap-2 border-l-4 border-success pl-3">
-                        <h3 className="text-sm font-black uppercase tracking-wider text-foreground">Pickup Location</h3>
-                    </div>
-                    <div className="space-y-4 p-6 rounded-3xl border border-border/70 bg-muted/20">
+                    <h3 className="text-sm font-semibold text-foreground border-b pb-2">Pickup Location</h3>
+                    <div className="space-y-5">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 ml-1">Zip/Pincode *</Label>
+                                <Label className="text-sm">Zip/Pincode *</Label>
                                 <Input
                                     placeholder="6 digit code"
-                                    className="h-11 rounded-xl border-border/80 bg-background focus:ring-primary/20 font-bold tracking-[0.2em]"
                                     maxLength={6}
                                     value={formData.senderPincode}
                                     onChange={(e) => handleInputChange("senderPincode", e.target.value.replace(/\D/g, ''))}
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label className="text-[10px] font-black uppercase tracking-widest text-success/70 ml-1">Validated Hub</Label>
-                                <div className="h-11 flex items-center px-4 rounded-xl border border-border/80 bg-background/50 font-black text-[10px] text-success truncate">
-                                    {formData.senderCity || (formData.senderPincode.length === 6 ? 'VAL_SEQ_01...' : 'AWAIT_LOC')}
+                                <Label className="text-sm text-muted-foreground">Validated Hub</Label>
+                                <div className="h-10 flex items-center px-3 rounded-md border bg-muted/50 text-sm text-muted-foreground truncate">
+                                    {formData.senderCity ? `${formData.senderCity}${formData.senderState ? ', ' + formData.senderState : ''}` : (formData.senderPincode.length === 6 ? 'Locating...' : 'Awaiting code')}
                                 </div>
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 ml-1">Detailed Address *</Label>
+                            <Label className="text-sm">Address Line 1 *</Label>
                             <Input
-                                placeholder="Floor, Building, Area"
-                                className="h-11 rounded-xl border-border/80 bg-background focus:ring-primary/20 font-bold"
+                                placeholder="Flat, Floor, Building Name"
                                 value={formData.senderAddressLine1}
                                 onChange={(e) => handleInputChange("senderAddressLine1", e.target.value)}
                             />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label className="text-sm">Address Line 2 <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+                                <Input
+                                    placeholder="Street, Area"
+                                    value={formData.senderAddressLine2}
+                                    onChange={(e) => handleInputChange("senderAddressLine2", e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-sm">Landmark <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+                                <Input
+                                    placeholder="Near by..."
+                                    value={formData.senderLandmark}
+                                    onChange={(e) => handleInputChange("senderLandmark", e.target.value)}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>

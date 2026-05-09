@@ -119,7 +119,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             creatorName: userData.creatorName,
             city: userData.city,
             pincode: userData.pincode,
-            childrenBranches: userData.childrenBranches
+            childrenBranches: userData.childrenBranches,
+            customerId: userData.customerId,
+            receivers: userData.receivers,
+            pickupLocations: userData.pickupLocations,
+            volumetricWeightDivisor: userData.volumetricWeightDivisor,
+            allowedServices: userData.allowedServices,
+            billingType: userData.billingType
           },
           expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         };
@@ -210,7 +216,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           branchName: data.branchName,
           branchAdminName: data.branchAdminName,
           creatorName: data.creatorName,
-          childrenBranches: data.childrenBranches
+          city: data.city,
+          pincode: data.pincode,
+          childrenBranches: data.childrenBranches,
+          customerId: data.customerId,
+          receivers: data.receivers,
+          pickupLocations: data.pickupLocations,
+          volumetricWeightDivisor: data.volumetricWeightDivisor,
+          allowedServices: data.allowedServices,
+          billingType: data.billingType
         },
         token: data.token, // Store token in session object
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),

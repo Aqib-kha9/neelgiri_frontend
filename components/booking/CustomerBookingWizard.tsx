@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
     User,
@@ -57,14 +57,14 @@ export default function CustomerBookingWizard() {
 
     const [formData, setFormData] = useState({
         // Sender details
-        senderName: session?.user?.name || "",
+        senderName: "",
         senderPhone: "",
-        senderEmail: session?.user?.email || "",
+        senderEmail: "",
         senderAddressLine1: "",
         senderAddressLine2: "",
         senderLandmark: "",
-        senderPincode: session?.user?.pincode || "",
-        senderCity: session?.user?.city || "",
+        senderPincode: "",
+        senderCity: "",
         senderState: "",
 
         // Receiver details
@@ -110,20 +110,7 @@ export default function CustomerBookingWizard() {
         volumetricWeight: 0
     });
 
-    // 1. Initial Pre-fill from Session
-    useEffect(() => {
-        if (session?.user) {
-            setFormData(prev => ({
-                ...prev,
-                senderName: session.user.name || prev.senderName,
-                senderPhone: session.user.phone || session.user.mobileNo || prev.senderPhone,
-                senderEmail: session.user.email || prev.senderEmail,
-                senderPincode: session.user.pincode || prev.senderPincode,
-                senderCity: session.user.city || prev.senderCity,
-                senderAddressLine1: session.user.address || prev.senderAddressLine1,
-            }));
-        }
-    }, [session]);
+    // No auto pre-fill — form starts blank, user fills manually or picks from Address Book
 
     // Update pricing when dimensions or weight change
     useEffect(() => {
@@ -306,16 +293,7 @@ export default function CustomerBookingWizard() {
     const handleSubmit = async () => {
         if (!formData.agreedToTerms) return;
         
-        if (formData.paymentMode === "cod") {
-            if (!formData.codAmount || parseFloat(formData.codAmount) <= 0) {
-                setValidationError("A valid Collect on Delivery (COD) amount is required.");
-                return;
-            }
-            if (parseFloat(formData.codAmount) > 50000) {
-                setValidationError("Maximum allowable COD amount is ₹50,000.");
-                return;
-            }
-        }
+
 
         setIsSubmitting(true);
         setValidationError(null);
@@ -355,7 +333,7 @@ export default function CustomerBookingWizard() {
                     },
                     contents: formData.contents,
                     paymentMode: formData.paymentMode,
-                    codAmount: formData.paymentMode === 'cod' ? (parseFloat(formData.codAmount) || 0) : 0,
+                    codAmount: 0,
                     declaredValue: parseFloat(formData.declaredValue) || 0,
                     mode: formData.mode
                 }),
@@ -407,80 +385,63 @@ export default function CustomerBookingWizard() {
 
     if (bookingSuccess) {
         return (
-            <div className="space-y-6 animate-in fade-in duration-700">
-                <section className="rounded-3xl border border-border/70 bg-card p-10 shadow-card text-center">
-                    <div className="mx-auto w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mb-6 border-4 border-background shadow-brand">
-                        <CheckCircle2 className="h-10 w-10 text-success" />
+            <div className="max-w-md mx-auto mt-12 space-y-6 animate-in fade-in duration-500">
+                <Card className="text-center p-8">
+                    <div className="mx-auto w-16 h-16 bg-green-50 text-green-600 rounded-full flex items-center justify-center mb-6">
+                        <CheckCircle2 className="h-8 w-8" />
                     </div>
-                    <h1 className="text-4xl font-black tracking-tighter mb-2 italic">Booking Confirmed!</h1>
-                    <p className="text-muted-foreground font-medium max-w-md mx-auto mb-8">
+                    <h1 className="text-2xl font-semibold mb-2">Booking Confirmed</h1>
+                    <p className="text-muted-foreground text-sm mb-8">
                         Your shipment has been successfully registered. You can track it using the AWB number below.
                     </p>
 
-                    <div className="bg-muted/30 p-8 rounded-3xl border border-border/50 inline-block text-left w-full max-w-sm mx-auto shadow-inner">
-                        <div className="flex justify-between items-center mb-4">
-                            <Badge variant="outline" className="rounded-full px-3 py-1 bg-background text-[10px] font-black tracking-widest">AWB NUMBER</Badge>
-                            <Badge className="bg-success text-white border-none rounded-full px-3 py-1 text-[10px] font-black">Ready for Pickup</Badge>
-                        </div>
-                        <p className="text-4xl font-mono font-black text-primary tracking-tighter mb-4">{bookingSuccess}</p>
-                        <Separator className="my-4 opacity-50" />
-                        <div className="flex justify-between text-sm items-center font-bold">
-                            <span className="text-muted-foreground uppercase text-[10px] tracking-widest">Estimated Total</span>
-                            <span className="text-2xl text-foreground tabular-nums">₹{pricing.netAmount}</span>
-                        </div>
+                    <div className="bg-muted/50 p-6 rounded-lg mb-8">
+                        <p className="text-sm font-medium text-muted-foreground mb-2">AWB NUMBER</p>
+                        <p className="text-2xl font-mono font-semibold text-primary">{bookingSuccess}</p>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-3 justify-center mt-10">
-                        <Button className="rounded-xl h-12 px-8 font-black shadow-brand gap-2 uppercase tracking-widest text-[10px]" onClick={() => router.push(`/dashboard/tracking?awb=${bookingSuccess}`)}>
-                            Track Shipment <ArrowRight className="h-4 w-4" />
+                    <div className="flex flex-col gap-3">
+                        <Button className="w-full" onClick={() => router.push(`/dashboard/tracking?awb=${bookingSuccess}`)}>
+                            Track Shipment
                         </Button>
-                        <Button variant="outline" className="rounded-xl h-12 px-8 border-border/70 font-black uppercase tracking-widest text-[10px]" onClick={() => window.location.reload()}>
+                        <Button variant="outline" className="w-full" onClick={() => window.location.reload()}>
                             New Booking
                         </Button>
                     </div>
-                </section>
+                </Card>
             </div>
         );
     }
 
     return (
-        <div className="space-y-6 min-h-screen bg-transparent pb-10">
-            {/* Standard Dashboard Page Header */}
+        <div className="space-y-8 pb-10">
             <WizardHeader session={session} />
+            <WizardStepper currentStep={currentStep} steps={STEPS} />
 
-            {/* Progress Tracker Layer */}
-            <WizardStepper 
-                currentStep={currentStep} 
-                steps={STEPS} 
-            />
-
-            {/* Application Core Layout */}
-            <div className="grid lg:grid-cols-12 gap-6 items-start">
-                
-                {/* Workflow Terminal (Primary Form) */}
+            <div className="grid lg:grid-cols-12 gap-8 items-start">
                 <div className="lg:col-span-8">
-                    <Card className="rounded-3xl border border-border/70 shadow-card bg-card overflow-hidden min-h-[600px] flex flex-col relative">
-                        <CardHeader className="p-8 border-b border-border/50 bg-muted/20">
-                            <div className="flex items-center gap-4">
-                                <div className="h-12 w-12 bg-primary/10 rounded-xl flex items-center justify-center text-primary border border-primary/20">
+                    <Card className="flex flex-col min-h-[500px]">
+                        <CardHeader className="border-b px-6 py-4">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-primary/10 text-primary rounded-md">
                                     {(() => {
                                         const Icon = STEPS[currentStep - 1].icon;
-                                        return <Icon className="h-6 w-6" />
+                                        return <Icon className="h-5 w-5" />
                                     })()}
                                 </div>
                                 <div>
-                                    <p className="text-[10px] uppercase font-black tracking-[.2em] text-primary mb-0.5">Protocol Stage 0{currentStep}</p>
-                                    <h2 className="text-2xl font-black tracking-tight text-foreground uppercase">{STEPS[currentStep - 1].label}</h2>
+                                    <p className="text-sm text-muted-foreground">Step {currentStep} of {STEPS.length}</p>
+                                    <h2 className="text-lg font-semibold">{STEPS[currentStep - 1].label}</h2>
                                 </div>
                             </div>
                         </CardHeader>
 
-                        <CardContent className="p-8 flex-1">
+                        <CardContent className="p-6 flex-1">
                             {validationError && (
-                                <Alert variant="destructive" className="mb-6 rounded-xl border-2 bg-destructive/5 animate-in slide-in-from-top-2">
+                                <Alert variant="destructive" className="mb-6">
                                     <AlertTriangle className="h-4 w-4" />
-                                    <AlertTitle className="font-black text-[10px] uppercase tracking-widest">Entry Error</AlertTitle>
-                                    <AlertDescription className="font-bold text-xs">{validationError}</AlertDescription>
+                                    <AlertTitle>Error</AlertTitle>
+                                    <AlertDescription>{validationError}</AlertDescription>
                                 </Alert>
                             )}
 
@@ -521,40 +482,36 @@ export default function CustomerBookingWizard() {
                             )}
                         </CardContent>          
 
-                        <CardFooter className="p-8 bg-muted/30 border-t border-border/50 flex flex-col sm:flex-row justify-between gap-4">
+                        <CardFooter className="px-6 py-4 border-t flex items-center justify-between gap-4 bg-muted/20">
                             <Button
                                 variant="outline"
-                                className="h-12 rounded-xl gap-2 font-black px-8 border-border/70 bg-background hover:bg-muted text-foreground transition-all uppercase tracking-widest text-[10px] disabled:opacity-30"
                                 onClick={handleBack}
                                 disabled={currentStep === 1 || isSubmitting}
                             >
-                                <ChevronLeft className="h-4 w-4" /> Previous
+                                Back
                             </Button>
 
-                            <div className="flex-1 max-w-sm sm:w-[320px]">
+                            <div className="flex-1 max-w-[200px]">
                                 {currentStep < 4 ? (
                                     <Button
-                                        className="w-full h-12 rounded-xl gap-2 font-black shadow-brand group transition-all duration-300 uppercase tracking-widest text-[11px]"
+                                        className="w-full"
                                         onClick={handleNextStep}
                                     >
-                                        Next Stage <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                                        Next
                                     </Button>
                                 ) : (
                                     <Button
-                                        className={`w-full h-12 rounded-xl gap-3 font-black shadow-brand group transition-all duration-500 uppercase tracking-widest text-[11px] ${formData.agreedToTerms ? "bg-success hover:bg-success/90 text-white shadow-success/20 ring-4 ring-success/10" : "opacity-50"}`}
+                                        className="w-full"
                                         onClick={handleSubmit}
                                         disabled={!formData.agreedToTerms || isSubmitting}
                                     >
                                         {isSubmitting ? (
                                             <>
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                                <span>Finalizing Booking...</span>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Processing
                                             </>
                                         ) : (
-                                            <>
-                                                <span>Confirm & Generate</span>
-                                                <Sparkles className="h-4 w-4" />
-                                            </>
+                                            "Confirm Booking"
                                         )}
                                     </Button>
                                 )}

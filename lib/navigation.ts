@@ -254,6 +254,23 @@ export function getNavigationForRole(
         }
       }
     }
+
+    // Add Address Book for Customer role
+    if (role === 'customer') {
+      const masterExists = nav.find(item => item.title === 'Master Data');
+      if (!masterExists) {
+        nav.push({
+          title: "Master Data",
+          icon: "Database",
+          children: [{ title: "Address Book", href: "/dashboard/address-book" }],
+        });
+      } else if (masterExists.children) {
+        if (!masterExists.children.find(c => c.title === 'Address Book')) {
+          masterExists.children.push({ title: "Address Book", href: "/dashboard/address-book" });
+        }
+      }
+    }
+
     return nav;
   }
 
@@ -530,6 +547,13 @@ function getCustomerNavigation(): NavigationItem[] {
   return [
     { title: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
     { title: "Create Order", href: "/dashboard/customer/booking", icon: "Package" },
+    {
+      title: "Master Data",
+      icon: "Database",
+      children: [
+        { title: "Address Book", href: "/dashboard/address-book" },
+      ],
+    },
   ];
 }
 
