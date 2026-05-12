@@ -241,11 +241,52 @@ export const OrderCard = ({ order }: OrderCardProps) => {
                       {order.package.invoiceValue}
                     </p>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    E-Way Bill: {order.eWayBill}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground">FOV Charge</p>
+                      <p className="text-sm font-semibold text-primary">{order.fovCharge}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-1 pt-2 border-t border-border/40">
+                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold">Document Metadata</div>
+                    <div className="text-xs text-muted-foreground">
+                      Invoice No: <span className="text-foreground font-medium">{order.senderInvoiceNo}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      E-Way Bill: <span className="text-foreground font-medium">{order.eWayBill}</span>
+                    </div>
+                    {order.additionalDocNos && order.additionalDocNos.length > 0 && (
+                      <div className="text-xs text-muted-foreground">
+                        Other Docs: <span className="text-foreground font-medium">{order.additionalDocNos.join(', ')}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
+
+              {order.attachments && order.attachments.length > 0 && (
+                <div className="rounded-xl border border-border/60 p-4 mt-2 bg-muted/20">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">Attachments ({order.attachments.length})</p>
+                  <div className="flex flex-wrap gap-2">
+                    {order.attachments.map((att, idx) => (
+                      <a 
+                        key={idx} 
+                        href={att.url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="h-8 w-8 rounded bg-background border flex items-center justify-center hover:bg-primary/5 transition-colors group"
+                        title={att.originalname}
+                      >
+                        {att.category === 'parcel' ? (
+                          <Package className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+                        ) : (
+                          <FileText className="h-4 w-4 text-muted-foreground group-hover:text-primary" />
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="flex flex-col gap-2">
                 <Button

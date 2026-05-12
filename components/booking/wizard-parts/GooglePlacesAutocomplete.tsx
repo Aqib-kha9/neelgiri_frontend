@@ -9,9 +9,10 @@ interface PlaceAutocompleteProps {
     onSelect: (details: any) => void;
     placeholder?: string;
     label?: string;
+    skipName?: boolean;
 }
 
-export function GooglePlacesAutocomplete({ onSelect, placeholder = "Search business on Google...", label = "Auto-fill from Google" }: PlaceAutocompleteProps) {
+export function GooglePlacesAutocomplete({ onSelect, placeholder = "Search business on Google...", label = "Auto-fill from Google", skipName = false }: PlaceAutocompleteProps) {
     const [query, setQuery] = useState("");
     const [results, setResults] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -93,7 +94,7 @@ export function GooglePlacesAutocomplete({ onSelect, placeholder = "Search busin
                     });
 
                     onSelect({
-                        name: result.name,
+                        name: skipName ? "" : result.name,
                         address: result.formatted_address,
                         pincode,
                         city,

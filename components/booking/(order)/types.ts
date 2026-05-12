@@ -41,6 +41,14 @@ export interface Order {
   lastUpdated: string;
   qrCode: string;
   eWayBill: string;
+  senderInvoiceNo?: string;
+  additionalDocNos?: string[];
+  fovCharge?: string;
+  attachments?: Array<{
+    url: string;
+    originalname: string;
+    category: string;
+  }>;
   partner: string;
   rider: string;
 }

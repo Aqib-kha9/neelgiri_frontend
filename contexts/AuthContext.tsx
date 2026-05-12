@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log("AuthContext: fetch /me status:", res.status);
 
-      if (res.ok) {
+        if (res.ok) {
         const userData = await res.json();
         const currentSession: Session = {
           user: {
@@ -127,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             allowedServices: userData.allowedServices,
             billingType: userData.billingType
           },
+          token: token || undefined, // Include the token we verified
           expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         };
         setSession(currentSession);

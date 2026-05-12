@@ -40,36 +40,36 @@ export function LiveQuoteSidebar({ pricing, formData, session, isPricingLoading 
                 <div className="space-y-4">
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Base Freight</span>
-                        <span className="font-medium">₹{pricing.baseFreight}</span>
+                        <span className="font-medium">₹{pricing.baseFreight.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                     
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Fuel Surcharge</span>
-                        <span className="font-medium">₹{pricing.fuelSurcharge}</span>
+                        <span className="font-medium">₹{pricing.fuelSurcharge.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
 
                     {pricing.odaSurcharge > 0 && (
                         <div className="flex justify-between items-center text-sm text-amber-600">
                             <span>ODA Surcharge</span>
-                            <span className="font-medium">₹{pricing.odaSurcharge}</span>
+                            <span className="font-medium">₹{pricing.odaSurcharge.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                     )}
 
                     {pricing.codCharge > 0 && (
                         <div className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground">COD Charge</span>
-                            <span className="font-medium">₹{pricing.codCharge}</span>
+                            <span className="font-medium">₹{pricing.codCharge.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                     )}
 
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">Transit Insurance</span>
-                        <span className="font-medium">₹{pricing.insuranceAmount}</span>
+                        <span className="font-medium">₹{pricing.insuranceAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
 
                     <div className="flex justify-between items-center text-sm">
                         <span className="text-muted-foreground">GST ({pricing.gstRate}%)</span>
-                        <span className="font-medium">₹{pricing.taxAmount}</span>
+                        <span className="font-medium">₹{pricing.taxAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                 </div>
 
@@ -78,7 +78,9 @@ export function LiveQuoteSidebar({ pricing, formData, session, isPricingLoading 
                 <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Total Amount</p>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-semibold tracking-tight text-foreground">₹{pricing.netAmount}</span>
+                        <span className="text-3xl font-semibold tracking-tight text-foreground">
+                            ₹{pricing.netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
                         <span className="text-xs text-muted-foreground">Inc. Tax</span>
                     </div>
                 </div>

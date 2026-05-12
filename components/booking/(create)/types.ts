@@ -40,6 +40,8 @@ export interface BookingFormData {
   ewayBillNo: string;
   ewayValidityStart: string;
   ewayValidityEnd: string;
+  senderInvoiceNo?: string;
+  additionalDocNos?: string;
 
   // Misc
   remark: string;
@@ -80,6 +82,7 @@ export interface Customer {
   // Additional fields
   fuelCharges?: number;
   fovCharges?: number;
+  fovPercentage?: number;
   quotationType?: string;
   awt?: number;
   category?: string;

@@ -128,6 +128,10 @@ function mapShipmentToOrder(s: any): Order {
       : "—",
     qrCode: s.awb,
     eWayBill: s.eWayBill || "—",
+    senderInvoiceNo: s.senderInvoiceNo || "—",
+    additionalDocNos: s.additionalDocNos || [],
+    fovCharge: typeof s.fovCharge === 'number' ? `₹${s.fovCharge.toFixed(2)}` : "—",
+    attachments: s.attachments || [],
     partner: s.currentBranch?.name || "—",
     rider: s.rider?.name || "—",
   };

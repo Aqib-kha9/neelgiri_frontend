@@ -82,6 +82,7 @@ const CustomerForm = ({ customer, onSave, onCancel }: CustomerFormProps) => {
     status: "active",
     fuelCharges: 0,
     fovCharges: 0,
+    fovPercentage: 0,
     quotationType: "Standard",
     awt: 0,
     category: "CUSTOMER",
@@ -164,6 +165,7 @@ const CustomerForm = ({ customer, onSave, onCancel }: CustomerFormProps) => {
         status: customer.status,
         fuelCharges: customer.fuelCharges,
         fovCharges: customer.fovCharges,
+        fovPercentage: customer.fovPercentage || 0,
         quotationType: customer.quotationType,
         awt: customer.awt,
         category: customer.category,
@@ -932,6 +934,31 @@ const CustomerForm = ({ customer, onSave, onCancel }: CustomerFormProps) => {
                     </Select>
                     <p className="text-[10px] text-muted-foreground">
                       * This rate card will be used to calculate shipping prices for this customer.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="fovPercentage">Default FOV %</Label>
+                    <div className="relative">
+                      <Input
+                        id="fovPercentage"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={formData.fovPercentage}
+                        onChange={(e) =>
+                          handleInputChange(
+                            "fovPercentage",
+                            parseFloat(e.target.value) || 0
+                          )
+                        }
+                        className="rounded-lg pr-8"
+                        placeholder="e.g. 0.2"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      * Default percentage charged on declared goods value (Freight on Value).
                     </p>
                   </div>
                   <div className="space-y-2">

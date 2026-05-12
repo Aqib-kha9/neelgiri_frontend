@@ -1,8 +1,10 @@
 "use client";
 
-import { User, Phone, MapPin, CheckCircle2, Star, History, Mail } from "lucide-react";
+import { useState } from "react";
+import { User, Phone, MapPin, CheckCircle2, Mail, Shield, Loader2, History, Star } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -16,6 +18,8 @@ interface Step2ReceiverProps {
 }
 
 export function Step2Receiver({ formData, handleInputChange, session, selectSavedRecipient }: Step2ReceiverProps) {
+    const [isFetching, setIsFetching] = useState(false);
+
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
             {session?.user?.receivers?.length > 0 && (
@@ -45,9 +49,83 @@ export function Step2Receiver({ formData, handleInputChange, session, selectSave
                 <div className="space-y-4">
                     <h3 className="text-sm font-semibold text-foreground border-b pb-2">Receiver Information</h3>
                     
+                    <div className="space-y-2 p-3 rounded-lg bg-blue-50/50 border border-blue-100">
+                        <Label className="text-sm font-semibold text-blue-700 flex items-center gap-2">
+                            <Shield className="h-4 w-4" /> Smart Fetch via GSTIN
+                        </Label>
+                        <div className="flex gap-2">
+                            <Input 
+                                placeholder="Enter 15-digit GSTIN"
+                                value={formData.receiverGstin || ""}
+                                onChange={(e) => handleInputChange("receiverGstin", e.target.value.toUpperCase())}
+                                className="border-blue-200 bg-white focus:border-blue-400 font-mono"
+                                maxLength={15}
+                            />
+                            <Button 
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={isFetching}
+                                className="border-blue-300 text-blue-700 bg-white hover:bg-blue-50 shrink-0 min-w-[70px]"
+                                onClick={async () => {
+                                    if (formData.receiverGstin?.length !== 15) {
+                                        alert("Please enter a valid 15-digit GSTIN");
+                                        return;
+                                    }
+                                    setIsFetching(true);
+                                    try {
+                                        const token = localStorage.getItem("token");
+                                        const res = await fetch(`/api/shipments/compliance/gstin/${formData.receiverGstin}`, {
+                                            headers: { Authorization: `Bearer ${token}` }
+                                        });
+                                        const data = await res.json();
+                                        
+                                        // CORRECT MAPPING: Sandbox returns { data: { data: { ... } } }
+                                        const biz = data.data?.data || data.data; 
+
+                                        if (res.ok && biz) {
+                                            handleInputChange("receiverName", (biz.lgnm || biz.trade_name || biz.tradeNam || "").toString());
+                                            
+                                            // Construct address from pradr (Primary Address)
+                                            const addr = biz.pradr?.addr || {};
+                                            const formattedAddr = `${addr.bnm || ''} ${addr.bno || ''} ${addr.flno || ''} ${addr.loc || ''} ${addr.locality || ''} ${addr.st || ''}`.replace(/\s+/g, ' ').trim();
+                                            
+                                            handleInputChange("receiverAddressLine1", formattedAddr || "");
+                                            handleInputChange("receiverPincode", (addr.pncd || "").toString());
+                                            handleInputChange("receiverCity", (addr.dst || "").toString());
+                                            handleInputChange("receiverState", (addr.stcd || "").toString());
+                                            
+                                            alert("Success: Details populated!");
+                                        } else {
+                                            alert(`Error: ${data.message || "GSTIN details not found"}`);
+                                        }
+                                    } catch (err) {
+                                        console.error("GST Fetch failed", err);
+                                        alert("Failed to connect to verification service");
+                                    } finally {
+                                        setIsFetching(false);
+                                    }
+                                }}
+                            >
+                                {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : "Fetch"}
+                            </Button>
+                        </div>
+                        <p className="text-[10px] text-blue-600">Instantly fetch business name and address from Government database.</p>
+                    </div>
+
+                    <div className="relative py-2">
+                        <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t border-muted-foreground/10" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-background px-2 text-muted-foreground">Or Search via Google</span>
+                        </div>
+                    </div>
+                    
                     <div className="mb-2">
                         <GooglePlacesAutocomplete 
                             onSelect={(details) => {
+                                // Don't auto-fill name if it's empty (skipName is true)
                                 if (details.name) handleInputChange("receiverName", details.name);
                                 if (details.phone) handleInputChange("receiverPhone", details.phone);
                                 if (details.pincode) handleInputChange("receiverPincode", details.pincode);
@@ -55,7 +133,8 @@ export function Step2Receiver({ formData, handleInputChange, session, selectSave
                                 if (details.state) handleInputChange("receiverState", details.state);
                                 if (details.address) handleInputChange("receiverAddressLine1", details.address);
                             }} 
-                            label="Auto-fill destination from Google" 
+                            skipName={true}
+                            label="Google Places Search" 
                             placeholder="Type business name..."
                         />
                     </div>
@@ -108,7 +187,7 @@ export function Step2Receiver({ formData, handleInputChange, session, selectSave
                             <div className="space-y-2">
                                 <Label className="text-sm text-muted-foreground">Validated City</Label>
                                 <div className="h-10 flex items-center px-3 rounded-md border bg-muted/50 text-sm text-muted-foreground truncate">
-                                    {formData.receiverCity ? `${formData.receiverCity}${formData.receiverState ? ', ' + formData.receiverState : ''}` : (formData.receiverPincode.length === 6 ? 'Locating...' : 'Awaiting code')}
+                                    {formData.receiverCity ? `${formData.receiverCity}${formData.receiverState ? ', ' + formData.receiverState : ''}` : (formData.receiverPincode?.length === 6 ? 'Locating...' : 'Awaiting code')}
                                 </div>
                             </div>
                         </div>

@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Printer, Plus } from "lucide-react";
+import { Printer, Plus, Camera, Upload, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import DocumentSearch from "./DocumentSearch";
@@ -198,7 +198,18 @@ const CreateBooking = () => {
   useEffect(() => {
     const baseFreight = parseFloat(formData.baseFreight) || 0;
     const otherAddLess = parseFloat(formData.otherAddLess) || 0;
-    const fovAmt = parseFloat(formData.fovAmt) || 0;
+    const invoiceValue = parseFloat(formData.invoiceValue) || 0;
+    
+    // Auto-calculate FOV if percentage is available for sender
+    let fovAmt = parseFloat(formData.fovAmt) || 0;
+    const fovPercentage = (formData.sender as any)?.fovPercentage || 0;
+    
+    if (fovPercentage > 0 && invoiceValue > 0) {
+      // For auto-calculation, we check if fovAmt is currently 0 or if we want to force it
+      // To allow manual override, we'll only update if it matches the percentage or is 0
+      fovAmt = (invoiceValue * fovPercentage) / 100;
+    }
+
     const fuelSurcharge = calculateFuelSurcharge();
     const taxPercent = parseFloat(formData.taxPercent) || 18;
 
@@ -208,6 +219,7 @@ const CreateBooking = () => {
 
     setFormData((prev) => ({
       ...prev,
+      fovAmt: fovAmt > 0 ? fovAmt.toFixed(2) : prev.fovAmt,
       fuelPercent: (
         FUEL_SURCHARGE[prev.distanceZone as keyof typeof FUEL_SURCHARGE] || 0
       ).toString(),
@@ -218,6 +230,8 @@ const CreateBooking = () => {
     formData.baseFreight,
     formData.otherAddLess,
     formData.fovAmt,
+    formData.invoiceValue,
+    (formData.sender as any)?.fovPercentage,
     formData.distanceZone,
     formData.taxPercent,
   ]);
@@ -1489,6 +1503,58 @@ const CreateBooking = () => {
                     <option value="BUBBLE">Bubble Wrap</option>
                     <option value="CARTON">Carton Box</option>
                   </select>
+                </div>
+
+                {/* Sender Invoice Section */}
+                <div className="space-y-2 col-span-2 pt-3 border-t">
+                  <label className="text-sm font-medium">
+                    Sender Invoice Number
+                  </label>
+                  <input
+                    value={formData.senderInvoiceNo || ""}
+                    onChange={(e) =>
+                      handleFormChange("senderInvoiceNo", e.target.value)
+                    }
+                    className="w-full p-2 border rounded-lg bg-white"
+                    placeholder="Enter Invoice Number"
+                  />
+                </div>
+
+                {/* Additional Documents Section */}
+                <div className="space-y-2 col-span-2">
+                  <label className="text-sm font-medium">
+                    Other Document Numbers
+                  </label>
+                  <input
+                    value={formData.additionalDocNos || ""}
+                    onChange={(e) =>
+                      handleFormChange("additionalDocNos", e.target.value)
+                    }
+                    className="w-full p-2 border rounded-lg bg-white"
+                    placeholder="e.g. DC No, Permit No (Comma separated)"
+                  />
+                </div>
+
+                {/* File Upload Section */}
+                <div className="space-y-4 col-span-2 pt-3 border-t">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Camera className="h-4 w-4" /> Shipments Attachments (Photos/Scans)
+                  </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="border-2 border-dashed border-muted-foreground/20 rounded-xl p-4 flex flex-col items-center justify-center hover:border-primary/50 transition-colors cursor-pointer bg-muted/5">
+                      <Upload className="h-6 w-6 text-muted-foreground mb-2" />
+                      <span className="text-xs font-medium text-muted-foreground">Upload Parcel Photos</span>
+                      <input type="file" multiple className="hidden" accept="image/*" />
+                    </div>
+                    <div className="border-2 border-dashed border-muted-foreground/20 rounded-xl p-4 flex flex-col items-center justify-center hover:border-primary/50 transition-colors cursor-pointer bg-muted/5">
+                      <FileText className="h-6 w-6 text-muted-foreground mb-2" />
+                      <span className="text-xs font-medium text-muted-foreground">Upload Document Scans</span>
+                      <input type="file" multiple className="hidden" accept="image/*,application/pdf" />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    * Max 5 files per category. Supports JPG, PNG, PDF.
+                  </p>
                 </div>
 
                 {/* E-Way Bill Section */}

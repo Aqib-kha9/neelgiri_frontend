@@ -21,6 +21,7 @@ export interface Customer {
   status: "active" | "inactive";
   fuelCharges: number;
   fovCharges: number;
+  fovPercentage?: number;
   quotationType: string;
   awt: number;
   category: string;
@@ -76,6 +77,7 @@ export interface CustomerFormData {
   status: "active" | "inactive";
   fuelCharges: number;
   fovCharges: number;
+  fovPercentage?: number;
   quotationType: string;
   awt: number;
   category: string;

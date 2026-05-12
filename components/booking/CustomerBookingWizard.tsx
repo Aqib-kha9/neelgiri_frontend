@@ -95,7 +95,14 @@ export default function CustomerBookingWizard() {
         paymentMode: "prepaid",
         codAmount: "",
         agreedToTerms: false,
-        saveRecipientToMaster: false
+        saveRecipientToMaster: false,
+        senderInvoiceNo: "",
+        additionalDocNos: "",
+        eWayBill: "",
+        senderGstin: "",
+        receiverGstin: "",
+        fovPercentage: "", // Manual FOV override
+        attachments: [] as any[]
     });
 
     const [pricing, setPricing] = useState({
@@ -107,7 +114,8 @@ export default function CustomerBookingWizard() {
         odaSurcharge: 0,
         insuranceAmount: 0,
         gstRate: 18,
-        volumetricWeight: 0
+        volumetricWeight: 0,
+        codCharge: 0
     });
 
     // No auto pre-fill — form starts blank, user fills manually or picks from Address Book
@@ -115,7 +123,7 @@ export default function CustomerBookingWizard() {
     // Update pricing when dimensions or weight change
     useEffect(() => {
         const fetchPricing = async () => {
-            if (!formData.weight || !formData.receiverPincode || formData.receiverPincode.length < 6 || !formData.senderPincode || formData.senderPincode.length < 6) {
+            if (!formData.weight || !formData.receiverPincode || formData.receiverPincode?.length < 6 || !formData.senderPincode || formData.senderPincode?.length < 6) {
                 return;
             }
 
@@ -148,7 +156,8 @@ export default function CustomerBookingWizard() {
                         destPincode: formData.receiverPincode,
                         sourcePincode: formData.senderPincode,
                         declaredValue: parseFloat(formData.declaredValue) || 0,
-                        insuranceRequested: formData.insuranceRequired,
+                        fovPercentage: parseFloat(formData.fovPercentage) || null, // SEND OVERRIDE
+                        insuranceRequested: (parseFloat(formData.declaredValue) || 0) > 0, // Auto-request if value declared
                         customerType: session?.user?.role === 'customer' ? 'CUSTOMER' : 'WALK-IN'
                     }),
                 });
@@ -162,9 +171,10 @@ export default function CustomerBookingWizard() {
                         chargeableWeight: data.chargeableWeight,
                         fuelSurcharge: data.fuelSurcharge || 0,
                         odaSurcharge: data.odaSurcharge || 0,
-                        insuranceAmount: data.insuranceAmount || 0,
+                        insuranceAmount: data.fovCharge || 0, // MAP fovCharge to insuranceAmount
                         gstRate: data.gstRate || 18,
-                        volumetricWeight: volWeight
+                        volumetricWeight: volWeight,
+                        codCharge: data.codCharge || 0
                     });
                     setValidationError(null);
                 } else {
@@ -186,7 +196,7 @@ export default function CustomerBookingWizard() {
 
     // Pincode lookup for Sender City/State
     useEffect(() => {
-        if (formData.senderPincode.length === 6) {
+        if (formData.senderPincode?.length === 6) {
             const fetchPincodeDetails = async () => {
                 try {
                     const response = await fetch(`/api/pincodes/check/${formData.senderPincode}`);
@@ -208,7 +218,7 @@ export default function CustomerBookingWizard() {
 
     // Pincode lookup for Receiver City/State
     useEffect(() => {
-        if (formData.receiverPincode.length === 6) {
+        if (formData.receiverPincode?.length === 6) {
             const fetchPincodeDetails = async () => {
                 try {
                     const response = await fetch(`/api/pincodes/check/${formData.receiverPincode}`);
@@ -231,6 +241,34 @@ export default function CustomerBookingWizard() {
     const handleInputChange = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
         if (validationError) setValidationError(null);
+    };
+
+    const uploadFiles = async (files: File[]) => {
+        const uploadData = new FormData();
+        files.forEach(file => uploadData.append('files', file));
+
+        const token = session?.token || (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
+
+        try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/shipments/upload`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
+                body: uploadData
+            });
+
+            if (!response.ok) throw new Error('Upload failed');
+            const data = await response.json();
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+            return data.files.map((f: any) => ({
+                ...f,
+                url: f.url.startsWith('http') ? f.url : `${baseUrl}${f.url}`
+            })); // Array of {url, originalname, mimetype}
+        } catch (error) {
+            console.error('Upload Error:', error);
+            return [];
+        }
     };
 
     const selectSavedPickup = (pickupId: string) => {
@@ -314,7 +352,8 @@ export default function CustomerBookingWizard() {
                         pincode: formData.senderPincode,
                         city: formData.senderCity,
                         state: formData.senderState,
-                        email: formData.senderEmail
+                        email: formData.senderEmail,
+                        gstin: formData.senderGstin
                     },
                     receiver: {
                         name: formData.receiverName,
@@ -323,7 +362,8 @@ export default function CustomerBookingWizard() {
                         pincode: formData.receiverPincode,
                         city: formData.receiverCity,
                         state: formData.receiverState,
-                        email: formData.receiverEmail
+                        email: formData.receiverEmail,
+                        gstin: formData.receiverGstin
                     },
                     weight: parseFloat(formData.weight),
                     dimensions: {
@@ -335,7 +375,15 @@ export default function CustomerBookingWizard() {
                     paymentMode: formData.paymentMode,
                     codAmount: 0,
                     declaredValue: parseFloat(formData.declaredValue) || 0,
-                    mode: formData.mode
+                    mode: formData.mode,
+                    senderInvoiceNo: formData.senderInvoiceNo,
+                    eWayBill: formData.eWayBill,
+                    additionalDocNos: formData.additionalDocNos ? formData.additionalDocNos.split(',').map(s => s.trim()) : [],
+                    attachments: formData.attachments.map((a: any) => ({
+                        url: a.url,
+                        originalname: a.name,
+                        category: a.type === 'parcel_photo' ? 'parcel' : 'invoice'
+                    }))
                 }),
             });
 
@@ -470,6 +518,7 @@ export default function CustomerBookingWizard() {
                                     handleInputChange={handleInputChange} 
                                     pricing={pricing} 
                                     session={session}
+                                    uploadFiles={uploadFiles}
                                 />
                             )}
 
@@ -478,6 +527,7 @@ export default function CustomerBookingWizard() {
                                     formData={formData} 
                                     handleInputChange={handleInputChange} 
                                     session={session} 
+                                    uploadFiles={uploadFiles}
                                 />
                             )}
                         </CardContent>          
