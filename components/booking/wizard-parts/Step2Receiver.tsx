@@ -57,8 +57,9 @@ export function Step2Receiver({ formData, handleInputChange, session, selectSave
                             <Input 
                                 placeholder="Enter 15-digit GSTIN"
                                 value={formData.receiverGstin || ""}
-                                onChange={(e) => handleInputChange("receiverGstin", e.target.value.toUpperCase())}
-                                className="border-blue-200 bg-white focus:border-blue-400 font-mono"
+                                onChange={(e) => handleInputChange("receiverGstin", e.target.value)}
+                                onBlur={(e) => handleInputChange("receiverGstin", e.target.value.toUpperCase())}
+                                className="border-blue-200 bg-white focus:border-blue-400 font-mono uppercase"
                                 maxLength={15}
                             />
                             <Button 
@@ -68,14 +69,15 @@ export function Step2Receiver({ formData, handleInputChange, session, selectSave
                                 disabled={isFetching}
                                 className="border-blue-300 text-blue-700 bg-white hover:bg-blue-50 shrink-0 min-w-[70px]"
                                 onClick={async () => {
-                                    if (formData.receiverGstin?.length !== 15) {
+                                    const gstin = (formData.receiverGstin || "").trim().toUpperCase();
+                                    if (gstin.length !== 15) {
                                         alert("Please enter a valid 15-digit GSTIN");
                                         return;
                                     }
                                     setIsFetching(true);
                                     try {
                                         const token = localStorage.getItem("token");
-                                        const res = await fetch(`/api/shipments/compliance/gstin/${formData.receiverGstin}`, {
+                                        const res = await fetch(`/api/shipments/compliance/gstin/${gstin}`, {
                                             headers: { Authorization: `Bearer ${token}` }
                                         });
                                         const data = await res.json();

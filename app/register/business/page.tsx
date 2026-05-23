@@ -250,7 +250,8 @@ export default function BusinessRegistrationPage() {
                                                 className="h-11 uppercase"
                                                 maxLength={15}
                                                 value={formData.gstin}
-                                                onChange={(e) => setFormData({ ...formData, gstin: e.target.value.toUpperCase() })}
+                                                onChange={(e) => setFormData({ ...formData, gstin: e.target.value })}
+                                                onBlur={(e) => setFormData({ ...formData, gstin: e.target.value.toUpperCase() })}
                                             />
                                         </div>
 

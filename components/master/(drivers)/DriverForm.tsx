@@ -237,7 +237,9 @@ const DriverForm = ({ open, onOpenChange, onSubmit, initialData }: DriverFormPro
                                                 id="licenseNo"
                                                 placeholder="DL Number"
                                                 value={formData.licenseNo}
-                                                onChange={(e) => handleChange("licenseNo", e.target.value.toUpperCase())}
+                                                onChange={(e) => handleChange("licenseNo", e.target.value)}
+                                                onBlur={(e) => handleChange("licenseNo", e.target.value.toUpperCase())}
+                                                className="uppercase"
                                                 required
                                             />
                                         </div>
@@ -269,7 +271,9 @@ const DriverForm = ({ open, onOpenChange, onSubmit, initialData }: DriverFormPro
                                                 id="pan"
                                                 placeholder="PAN Number"
                                                 value={formData.panCard || ""}
-                                                onChange={(e) => handleChange("panCard", e.target.value.toUpperCase())}
+                                                onChange={(e) => handleChange("panCard", e.target.value)}
+                                                onBlur={(e) => handleChange("panCard", e.target.value.toUpperCase())}
+                                                className="uppercase"
                                             />
                                         </div>
                                     </div>
@@ -336,7 +340,9 @@ const DriverForm = ({ open, onOpenChange, onSubmit, initialData }: DriverFormPro
                                             <Input
                                                 id="ifsc"
                                                 value={formData.bankDetails?.ifscCode || ""}
-                                                onChange={(e) => handleNestedChange("bankDetails", "ifscCode", e.target.value.toUpperCase())}
+                                                onChange={(e) => handleNestedChange("bankDetails", "ifscCode", e.target.value)}
+                                                onBlur={(e) => handleNestedChange("bankDetails", "ifscCode", e.target.value.toUpperCase())}
+                                                className="uppercase"
                                             />
                                         </div>
                                     </div>

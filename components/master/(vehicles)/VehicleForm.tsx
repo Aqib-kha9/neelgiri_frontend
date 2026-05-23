@@ -123,7 +123,9 @@ const VehicleForm = ({ open, onOpenChange, onSubmit, initialData }: VehicleFormP
                                             id="regNo"
                                             placeholder="e.g. MH-02-AB-1234"
                                             value={formData.regNo}
-                                            onChange={(e) => handleChange("regNo", e.target.value.toUpperCase())}
+                                            onChange={(e) => handleChange("regNo", e.target.value)}
+                                            onBlur={(e) => handleChange("regNo", e.target.value.toUpperCase())}
+                                            className="uppercase"
                                             required
                                         />
                                     </div>
