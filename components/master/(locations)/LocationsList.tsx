@@ -239,10 +239,10 @@ const LocationsList = ({
                         </div>
                         <div>
                           <span className="text-muted-foreground">
-                            Vehicles:{" "}
+                            Docking bays:{" "}
                           </span>
                           <span className="font-medium">
-                            {location.capacity.vehicles}
+                            {location.capacity.vehicleBays}
                           </span>
                         </div>
                       </div>

@@ -1,4 +1,5 @@
 
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,19 +25,48 @@ import {
   MoreHorizontal,
   Eye,
   Edit,
+  Power,
   Trash2,
 } from "lucide-react";
-import { branchesData } from "./data/mockData";
-
-type Branch = typeof branchesData[0];
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import type { Branch } from "./types";
 
 interface BranchTableProps {
   branches: Branch[];
   onEditBranch: (branch: Branch) => void;
-  onDeleteBranch: (branchId: string) => void;
+  onDeactivateBranch: (branchId: string) => void;
+  onPermanentDelete: (branchId: string) => Promise<boolean>;
 }
 
-export const BranchTable = ({ branches, onEditBranch, onDeleteBranch }: BranchTableProps) => {
+export const BranchTable = ({
+  branches,
+  onEditBranch,
+  onDeactivateBranch,
+  onPermanentDelete,
+}: BranchTableProps) => {
+  const [branchToDelete, setBranchToDelete] = useState<Branch | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const confirmPermanentDelete = async () => {
+    if (!branchToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const deleted = await onPermanentDelete(branchToDelete.id);
+      if (deleted) setBranchToDelete(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
   return (
     <Card className="rounded-3xl border-border/70 bg-card/95 shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
@@ -221,11 +251,18 @@ export const BranchTable = ({ branches, onEditBranch, onDeleteBranch }: BranchTa
                           Edit Branch
                         </DropdownMenuItem>
                         <DropdownMenuItem
+                          className="flex items-center gap-2 rounded-lg text-warning"
+                          onClick={() => onDeactivateBranch(branch.id)}
+                        >
+                          <Power className="h-4 w-4" />
+                          Deactivate
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           className="flex items-center gap-2 rounded-lg text-error"
-                          onClick={() => onDeleteBranch(branch.id)}
+                          onClick={() => setBranchToDelete(branch)}
                         >
                           <Trash2 className="h-4 w-4" />
-                          Deactivate
+                          Delete permanently
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -236,6 +273,34 @@ export const BranchTable = ({ branches, onEditBranch, onDeleteBranch }: BranchTa
           </TableBody>
         </Table>
       </CardContent>
+      <AlertDialog
+        open={Boolean(branchToDelete)}
+        onOpenChange={(open) => !open && !isDeleting && setBranchToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete branch permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {branchToDelete
+                ? `This permanently removes ${branchToDelete.name} (${branchToDelete.code}). This action cannot be undone.`
+                : "This action cannot be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+              onClick={(event) => {
+                event.preventDefault();
+                void confirmPermanentDelete();
+              }}
+            >
+              {isDeleting ? "Deleting..." : "Delete permanently"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 };

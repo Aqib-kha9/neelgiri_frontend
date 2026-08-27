@@ -40,7 +40,6 @@ All 12 todos have been successfully completed. The Logistics & Delivery Manageme
 ### 5. ✅ Branch Admin Pages
 - **Pages Created**:
   - `/dashboard/branches/add` - Add branch
-  - `/dashboard/branches/performance` - Branch performance
   - Branch operations dashboard
 
 ### 6. ✅ Warehouse Admin Pages

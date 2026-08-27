@@ -29,7 +29,6 @@ export const PERMISSION_MODULES = [
         label: "AWB Management",
         resources: [
             { key: "awb_series", label: "AWB Series" },
-            { key: "awb_allocation", label: "Allocation" },
             { key: "awb_usage", label: "Usage Report" },
         ],
     },
@@ -76,7 +75,6 @@ export const PERMISSION_MODULES = [
         resources: [
             { key: "branch_all", label: "All Branches" },
             { key: "branch_add", label: "Add Branch" },
-            { key: "branch_perf", label: "Branch Performance" },
             { key: "branch_service", label: "Service Areas" },
         ],
     },
@@ -151,6 +149,11 @@ export const PERMISSION_MODULES = [
             { key: "op_ex_flow", label: "Exception Workflow" },
             { key: "op_ex_rca", label: "Root Cause Analysis" },
             { key: "op_ex_qc", label: "Quality Control" },
+            // Logistics Operations
+            { key: "op_trips", label: "Trip Management" },
+            { key: "op_hub", label: "Hub Operations" },
+            { key: "op_rto", label: "RTO Management" },
+            { key: "op_sla", label: "SLA Monitoring" },
         ],
     },
     {

@@ -11,7 +11,24 @@ import PincodesList from "./PincodesList";
 import PincodeForm from "./PincodeForm";
 import PincodeBulkAction from "./PincodeBulkAction";
 import BranchPincodeView from "./BranchPincodeView";
-import { Pincode } from "./types";
+import { OperationalLocation, Pincode } from "./types";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 // Roles that get the scoped branch view instead of the global admin view
 const BRANCH_SCOPED_ROLES = ["branch_admin", "branch", "partner_admin", "partner"];
@@ -35,6 +52,7 @@ const AdminPincodesView = () => {
   const [stateFilter, setStateFilter] = useState("all");
   const [districtFilter, setDistrictFilter] = useState("all");
   const [mappingFilter, setMappingFilter] = useState("all");
+  const [locationMappingFilter, setLocationMappingFilter] = useState("all");
   const [branchStatusFilter, setBranchStatusFilter] = useState("all");
 
   const [distinctStates, setDistinctStates] = useState<string[]>([]);
@@ -44,6 +62,10 @@ const AdminPincodesView = () => {
   const [selectedPincode, setSelectedPincode] = useState<Pincode | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [serviceLocations, setServiceLocations] = useState<OperationalLocation[]>([]);
+  const [showLocationMapper, setShowLocationMapper] = useState(false);
+  const [selectedLocationId, setSelectedLocationId] = useState("__none__");
+  const [mappingLocation, setMappingLocation] = useState(false);
 
   const fetchDistinctLocations = useCallback(async () => {
     try {
@@ -55,6 +77,22 @@ const AdminPincodesView = () => {
       setDistinctDistricts(data.districts || []);
     } catch (error) {
       console.error("Failed to fetch locations", error);
+    }
+  }, []);
+
+  const fetchServiceLocations = useCallback(async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const { data } = await axios.get("/api/locations", {
+        params: { status: "ACTIVE" },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const list = Array.isArray(data) ? data : data.locations || [];
+      setServiceLocations(list.filter((location: OperationalLocation) =>
+        ["BRANCH", "DELIVERY_CENTER", "PICKUP_POINT"].includes(location.type)
+      ));
+    } catch (error) {
+      console.error("Failed to fetch operational facilities", error);
     }
   }, []);
 
@@ -70,6 +108,7 @@ const AdminPincodesView = () => {
         district: districtFilter,
         isServiceable: statusFilter === "all" ? undefined : statusFilter === "true",
         mapping: mappingFilter === "all" ? undefined : mappingFilter,
+        locationMapping: locationMappingFilter === "all" ? undefined : locationMappingFilter,
         isActiveForBranch: branchStatusFilter === "all" ? undefined : branchStatusFilter === "true"
       };
 
@@ -87,10 +126,11 @@ const AdminPincodesView = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, searchTerm, statusFilter, stateFilter, districtFilter, mappingFilter, branchStatusFilter]);
+  }, [page, searchTerm, statusFilter, stateFilter, districtFilter, mappingFilter, locationMappingFilter, branchStatusFilter]);
 
   useEffect(() => { fetchPincodes(); }, [fetchPincodes]);
   useEffect(() => { fetchDistinctLocations(); }, [fetchDistinctLocations]);
+  useEffect(() => { fetchServiceLocations(); }, [fetchServiceLocations]);
 
   const handleBulkUpdate = async (type: "state" | "district", value: string, isServiceable: boolean) => {
     setBulkLoading(true);
@@ -132,6 +172,28 @@ const AdminPincodesView = () => {
     }
   };
 
+  const handleMapSelectedLocation = async () => {
+    setMappingLocation(true);
+    try {
+      const token = localStorage.getItem("token");
+      const locationId = selectedLocationId === "__none__" ? null : selectedLocationId;
+      const { data } = await axios.post("/api/pincodes/bulk-map-location", {
+        pincodeIds: selectedPincodeIds,
+        locationId,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success(data.message || "Operational facility mapping updated");
+      setSelectedPincodeIds([]);
+      setShowLocationMapper(false);
+      fetchPincodes();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to map operational facility");
+    } finally {
+      setMappingLocation(false);
+    }
+  };
+
   return (
     <div className="space-y-7 p-6">
       <PincodesHeader
@@ -158,6 +220,8 @@ const AdminPincodesView = () => {
         onDistrictFilterChange={(val) => { setDistrictFilter(val); setPage(1); }}
         mappingFilter={mappingFilter}
         onMappingFilterChange={(val) => { setMappingFilter(val); setPage(1); }}
+        locationMappingFilter={locationMappingFilter}
+        onLocationMappingFilterChange={(val) => { setLocationMappingFilter(val); setPage(1); }}
         branchStatusFilter={branchStatusFilter}
         onBranchStatusFilterChange={(val) => { setBranchStatusFilter(val); setPage(1); }}
         states={distinctStates}
@@ -185,6 +249,7 @@ const AdminPincodesView = () => {
           }}
           onToggleStatus={handleToggleStatus}
           onBulkDelete={() => { }}
+          onMapSelectedLocation={() => setShowLocationMapper(true)}
           currentPage={page}
           totalPages={totalPages}
           onPageChange={setPage}
@@ -203,6 +268,42 @@ const AdminPincodesView = () => {
           pincode={selectedPincode}
         />
       )}
+
+      <Dialog open={showLocationMapper} onOpenChange={setShowLocationMapper}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Map Operational Facility</DialogTitle>
+            <DialogDescription>
+              Assign {selectedPincodeIds.length} selected pincode record(s) to the physical location responsible for pickup and delivery.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="bulkLocationId">Operational Facility</Label>
+            <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+              <SelectTrigger id="bulkLocationId">
+                <SelectValue placeholder="Select a facility" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Remove Location Mapping</SelectItem>
+                {serviceLocations.map((location) => (
+                  <SelectItem key={location._id} value={location._id}>
+                    {location.name} ({location.code}){location.address?.city ? ` · ${location.address.city}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {serviceLocations.length === 0 && (
+              <p className="text-xs text-amber-600">Create an active Branch, Delivery Centre, or Pickup Point in Location Master first.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLocationMapper(false)} disabled={mappingLocation}>Cancel</Button>
+            <Button onClick={handleMapSelectedLocation} disabled={mappingLocation || selectedPincodeIds.length === 0}>
+              {mappingLocation ? "Mapping..." : selectedLocationId === "__none__" ? "Remove Mapping" : "Map Facility"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

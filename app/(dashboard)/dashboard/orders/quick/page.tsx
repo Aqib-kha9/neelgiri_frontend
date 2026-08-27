@@ -1,8 +1,5 @@
-// import { QuickBooking } from "@/components/booking/(quick-booking)/QuickBooking";
-import BulkBooking  from "@/components/booking/(bulk)/BulkBooking";
-
+import { redirect } from "next/navigation";
 
 export default function QuickBookingPage() {
-  // return <QuickBooking />;
-  return <BulkBooking />;
+  redirect("/dashboard/booking/create");
 }

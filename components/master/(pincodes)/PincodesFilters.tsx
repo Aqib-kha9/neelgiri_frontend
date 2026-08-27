@@ -23,6 +23,8 @@ interface PincodesFiltersProps {
   onDistrictFilterChange: (value: string) => void;
   mappingFilter: string;
   onMappingFilterChange: (value: string) => void;
+  locationMappingFilter: string;
+  onLocationMappingFilterChange: (value: string) => void;
   branchStatusFilter: string;
   onBranchStatusFilterChange: (value: string) => void;
   states: string[];
@@ -41,6 +43,8 @@ const PincodesFilters = ({
   onDistrictFilterChange,
   mappingFilter,
   onMappingFilterChange,
+  locationMappingFilter,
+  onLocationMappingFilterChange,
   branchStatusFilter,
   onBranchStatusFilterChange,
   states,
@@ -86,6 +90,17 @@ const PincodesFilters = ({
                   <SelectItem value="all">All Mapping</SelectItem>
                   <SelectItem value="mapped">Mapped to Branch</SelectItem>
                   <SelectItem value="unmapped">Not Mapped</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={locationMappingFilter} onValueChange={onLocationMappingFilterChange}>
+                <SelectTrigger className="w-full sm:w-44 rounded-xl">
+                  <SelectValue placeholder="Operational Facility" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Facilities</SelectItem>
+                  <SelectItem value="mapped">Mapped to Location</SelectItem>
+                  <SelectItem value="unmapped">No Location Mapping</SelectItem>
                 </SelectContent>
               </Select>
 

@@ -2,20 +2,29 @@ import { useState, useEffect } from "react";
 import {
     User, MapPin, Package, CreditCard, CheckCircle2,
     ChevronRight, ChevronLeft, Truck, Search, Calculator,
-    Plane, Store, AlertCircle, ArrowRight
+    Plane, AlertCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { BookingFormData } from "@/components/booking/(create)/types";
-import { mockCustomers } from "@/components/booking/(create)/mockData";
-import { calculateBookingCharges, validateBookingRules } from "../rapid/BookingCalculations";
+import { BookingFormData, Customer } from "@/components/booking/(create)/types";
+import { apiClient } from "@/lib/api-client";
+import { shipmentApi } from "@/lib/api-services";
 
 interface WizardBookingFormProps {
     onSuccess: (bookingId: string) => void;
+}
+
+interface FreightQuote {
+    volumetricWeight: number;
+    chargeableWeight: number;
+    baseFreight: number;
+    gstAmount: number;
+    totalAmount: number;
 }
 
 const steps = [
@@ -25,9 +34,39 @@ const steps = [
     { id: 4, title: "Review", icon: CheckCircle2 },
 ];
 
+const mapCustomer = (customer: any): Customer => ({
+    id: customer._id || customer.id || "",
+    code: customer.code || "",
+    documentNo: customer.documentNo || "",
+    name: customer.name || "",
+    contactPerson: customer.contactPerson || "",
+    address1: customer.address1 || "",
+    address2: customer.address2 || "",
+    city: customer.city || "",
+    station: customer.station || "",
+    pincode: customer.pincode || "",
+    gstin: customer.gstin || "",
+    mobileNo: customer.mobileNo || "",
+    phoneO: customer.phoneO || "",
+    phoneR: customer.phoneR || "",
+    email: customer.email || "",
+    hasReceiver: Boolean(customer.hasReceiver),
+    receivers: customer.receivers || [],
+    usePickupLocation: Boolean(customer.usePickupLocation),
+    pickupLocations: customer.pickupLocations || [],
+    status: customer.status || "active",
+    fovPercentage: customer.fovPercentage,
+    allowedServices: customer.allowedServices,
+    serviceableZones: customer.serviceableZones,
+});
+
 export default function WizardBookingForm({ onSuccess }: WizardBookingFormProps) {
     const [currentStep, setCurrentStep] = useState(1);
     const [senderQuery, setSenderQuery] = useState("");
+    const [customers, setCustomers] = useState<Customer[]>([]);
+    const [serviceability, setServiceability] = useState<boolean | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+    const [termsAccepted, setTermsAccepted] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const [formData, setFormData] = useState<BookingFormData>({
@@ -56,27 +95,55 @@ export default function WizardBookingForm({ onSuccess }: WizardBookingFormProps)
         forwardTo: "", thru: "", charges: "", otherAddLess: "", netCharges: "", disc: "", taxPercent: "18", tax: "", ewayValidityStart: "", ewayValidityEnd: ""
     });
 
+    useEffect(() => {
+        const loadCustomers = async () => {
+            try {
+                const data = await apiClient.get<any[]>("/customers");
+                setCustomers((data || []).map(mapCustomer));
+            } catch (requestError: any) {
+                setError(requestError?.message || "Unable to load customers");
+            }
+        };
+        void loadCustomers();
+    }, []);
+
+    useEffect(() => {
+        const pincode = formData.receiver?.pincode || "";
+        if (!/^\d{6}$/.test(pincode)) {
+            setServiceability(null);
+            return;
+        }
+        const timer = window.setTimeout(async () => {
+            try {
+                const data = await apiClient.get<any>(`/pincodes/check/${pincode}`, { requireAuth: false });
+                setServiceability(Boolean(data.serviceable ?? data.data?.serviceable ?? data.isServiceable));
+            } catch {
+                setServiceability(false);
+            }
+        }, 300);
+        return () => window.clearTimeout(timer);
+    }, [formData.receiver?.pincode]);
+
     const handleNext = () => {
         setError(null);
-        // Validation Logic
         if (currentStep === 1) {
             if (!formData.sender) {
                 setError("Please select a Sender to proceed.");
                 return;
             }
-            if (!formData.receiver?.name || !formData.receiver?.pincode) {
+            if (!formData.receiver?.name || !formData.receiver?.address || !formData.receiver?.city || !/^\d{6}$/.test(formData.receiver.pincode)) {
                 setError("Please enter complete Receiver details.");
                 return;
             }
-        }
-        if (currentStep === 2) {
-            if (!formData.weight || parseFloat(formData.weight) <= 0) {
-                setError("Please enter a valid weight.");
+            if (serviceability !== true) {
+                setError("The receiver pincode is not serviceable.");
                 return;
             }
         }
-
-        // Auto-calculate on transition to Step 4 if needed, but doing it on Step 3 is better
+        if (currentStep === 2 && (!formData.weight || parseFloat(formData.weight) <= 0)) {
+            setError("Please enter a valid weight.");
+            return;
+        }
         setCurrentStep(prev => Math.min(prev + 1, 4));
     };
 
@@ -85,30 +152,91 @@ export default function WizardBookingForm({ onSuccess }: WizardBookingFormProps)
         setCurrentStep(prev => Math.max(prev - 1, 1));
     };
 
-    // Auto-Calculator Effect for Step 3
     useEffect(() => {
-        if (currentStep === 3) {
-            const result = calculateBookingCharges({
-                weight: parseFloat(formData.weight) || 0,
-                length: parseFloat(formData.length),
-                breadth: parseFloat(formData.breadth),
-                height: parseFloat(formData.height),
-                serviceType: formData.mode,
-                sourceCity: formData.sender?.city || "Delhi",
-                destCity: formData.receiver?.city || "Mumbai",
-                declaredValue: parseFloat(formData.invoiceValue)
-            });
-            setFormData(prev => ({
-                ...prev,
-                baseFreight: result.baseFreight.toString(),
-                taxAmount: result.taxAmount.toString(),
-                netAmount: result.netAmount.toString(),
-                chargeableWeight: result.chargeableWeight.toString(),
-                volumetricWeight: result.chargeableWeight.toString(),
-                rate: result.rateApplied.toString()
-            }));
+        const sender = formData.sender;
+        const receiver = formData.receiver;
+        if (currentStep !== 3 || !sender || !receiver || !formData.weight) return;
+        const calculateQuote = async () => {
+            try {
+                const quote = await apiClient.post<FreightQuote>("/rates/calculate", {
+                    weight: parseFloat(formData.weight) || 0,
+                    length: parseFloat(formData.length) || 0,
+                    breadth: parseFloat(formData.breadth) || 0,
+                    height: parseFloat(formData.height) || 0,
+                    serviceType: formData.mode,
+                    sourcePincode: sender.pincode,
+                    destPincode: receiver.pincode,
+                    declaredValue: parseFloat(formData.invoiceValue) || 0,
+                    insuranceRequested: formData.insuranceRequired,
+                    customerId: sender.id,
+                    customerType: "CUSTOMER",
+                    isCOD: formData.paymentMode === "COD"
+                });
+                setFormData(prev => ({
+                    ...prev,
+                    baseFreight: String(quote.baseFreight || 0),
+                    taxAmount: String(quote.gstAmount || 0),
+                    netAmount: String(quote.totalAmount || 0),
+                    chargeableWeight: String(quote.chargeableWeight || 0),
+                    volumetricWeight: String(quote.volumetricWeight || 0),
+                    rate: String(quote.baseFreight || 0)
+                }));
+            } catch (requestError: any) {
+                setError(requestError?.message || "Unable to calculate the booking quote");
+            }
+        };
+        void calculateQuote();
+    }, [currentStep, formData.sender, formData.receiver, formData.mode, formData.paymentMode, formData.weight, formData.length, formData.breadth, formData.height, formData.invoiceValue, formData.insuranceRequired]);
+
+    const handleSubmit = async () => {
+        if (!formData.sender || !formData.receiver || serviceability !== true) return;
+        if (!termsAccepted) {
+            setError("Please accept the booking terms before continuing.");
+            return;
         }
-    }, [currentStep, formData.mode, formData.weight, formData.length, formData.breadth, formData.height, formData.paymentMode]);
+        setSubmitting(true);
+        setError(null);
+        try {
+            const response = await shipmentApi.book({
+                customerId: formData.sender.id,
+                sender: {
+                    name: formData.sender.name,
+                    phone: formData.sender.mobileNo,
+                    address: `${formData.sender.address1}${formData.sender.address2 ? `, ${formData.sender.address2}` : ""}`,
+                    city: formData.sender.city,
+                    pincode: formData.sender.pincode,
+                    gstin: formData.sender.gstin
+                },
+                receiver: {
+                    name: formData.receiver.name,
+                    phone: formData.receiver.mobileNo,
+                    address: formData.receiver.address,
+                    city: formData.receiver.city,
+                    pincode: formData.receiver.pincode,
+                    email: formData.receiver.email
+                },
+                weight: parseFloat(formData.weight),
+                dimensions: {
+                    length: parseFloat(formData.length) || 0,
+                    width: parseFloat(formData.breadth) || 0,
+                    height: parseFloat(formData.height) || 0
+                },
+                contents: formData.contents || "General Parcel",
+                paymentMode: formData.paymentMode.toLowerCase() as "prepaid" | "cod" | "topay" | "credit",
+                codAmount: formData.paymentMode === "COD" ? parseFloat(formData.codAmount) || 0 : 0,
+                declaredValue: parseFloat(formData.invoiceValue) || 0,
+                mode: formData.mode === "AIR" ? "AIR" : "SURFACE",
+                eWayBill: formData.ewayBillNo || undefined,
+                termsAccepted,
+                termsVersion: "2026-08-21"
+            });
+            onSuccess(response.awb);
+        } catch (requestError: any) {
+            setError(requestError?.message || "Booking failed. Please try again.");
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
 
     return (
@@ -166,8 +294,13 @@ export default function WizardBookingForm({ onSuccess }: WizardBookingFormProps)
                                                 value={senderQuery}
                                                 onChange={(e) => {
                                                     setSenderQuery(e.target.value);
-                                                    const found = mockCustomers.find(c => c.mobileNo.includes(e.target.value) || c.code.toLowerCase().includes(e.target.value));
-                                                    if (found) setFormData({ ...formData, sender: found });
+                                                    const query = e.target.value.trim().toLowerCase();
+                                                    if (!query) {
+                                                        setFormData(prev => ({ ...prev, sender: null }));
+                                                        return;
+                                                    }
+                                                    const found = customers.find(c => c.mobileNo.includes(query) || c.code.toLowerCase().includes(query) || c.name.toLowerCase().includes(query));
+                                                    setFormData(prev => ({ ...prev, sender: found || null }));
                                                 }}
                                                 autoFocus
                                             />
@@ -235,10 +368,22 @@ export default function WizardBookingForm({ onSuccess }: WizardBookingFormProps)
                                             onChange={e => setFormData({ ...formData, receiver: { ...formData.receiver!, name: e.target.value } as any })}
                                         />
                                     </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs text-muted-foreground">Address</Label>
+                                        <Input className="h-10 bg-muted/20" placeholder="Complete delivery address" value={formData.receiver?.address || ""} onChange={e => setFormData(prev => ({ ...prev, receiver: { ...(prev.receiver || { id: "", name: "", city: "", pincode: "", mobileNo: "" }), address: e.target.value } as any }))} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label className="text-xs text-muted-foreground">City</Label>
+                                        <Input className="h-10 bg-muted/20" placeholder="Delivery city" value={formData.receiver?.city || ""} onChange={e => setFormData(prev => ({ ...prev, receiver: { ...(prev.receiver || { id: "", name: "", address: "", city: "", pincode: "", mobileNo: "" }), city: e.target.value } as any }))} />
+                                    </div>
                                     <div className="pt-2">
-                                        {formData.receiver?.pincode ? (
+                                        {serviceability === true ? (
                                             <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 p-2 rounded border border-green-100">
                                                 <CheckCircle2 className="w-3 h-3" /> Serviceable Area
+                                            </div>
+                                        ) : serviceability === false ? (
+                                            <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 p-2 rounded border border-red-100">
+                                                <AlertCircle className="w-3 h-3" /> Pincode is not serviceable
                                             </div>
                                         ) : (
                                             <div className="text-xs text-muted-foreground italic">Enter pincode to check serviceability</div>
@@ -473,6 +618,19 @@ export default function WizardBookingForm({ onSuccess }: WizardBookingFormProps)
                                 </div>
                             </div>
                         </Card>
+
+                        <label className="flex items-start gap-3 rounded-lg border p-4 cursor-pointer">
+                            <Checkbox
+                                checked={termsAccepted}
+                                onCheckedChange={(checked) => {
+                                    setTermsAccepted(checked === true);
+                                    if (checked === true) setError(null);
+                                }}
+                            />
+                            <span className="text-sm leading-5">
+                                I agree to the booking terms and conditions.
+                            </span>
+                        </label>
                     </div>
                 )}
             </div>
@@ -492,10 +650,11 @@ export default function WizardBookingForm({ onSuccess }: WizardBookingFormProps)
                 {currentStep === 4 ? (
                     <Button
                         size="lg"
-                        onClick={() => onSuccess("WIZ-" + Date.now().toString().slice(-4))}
+                        onClick={handleSubmit}
+                        disabled={submitting || !termsAccepted}
                         className="bg-green-600 hover:bg-green-700 h-12 px-8 text-base shadow-lg shadow-green-600/20"
                     >
-                        Confirm Booking <CheckCircle2 className="w-5 h-5 ml-2" />
+                        {submitting ? "Booking..." : "Confirm Booking"} <CheckCircle2 className="w-5 h-5 ml-2" />
                     </Button>
                 ) : (
                     <Button

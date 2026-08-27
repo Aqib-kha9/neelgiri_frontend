@@ -25,3 +25,30 @@ export interface PartnerStat {
     icon: any;
     description: string;
 }
+
+export const mapBackendPartner = (p: any): Partner => {
+    const statusMap: Record<string, Partner["status"]> = {
+        ACTIVE: "active",
+        PENDING: "pending",
+        SUSPENDED: "inactive",
+        TERMINATED: "inactive",
+    };
+    return {
+        id: p._id || p.id || "",
+        name: p.companyName || p.name || "Unknown Partner",
+        partnerId: p.partnerCode || p.partnerId || "N/A",
+        type: p.type || "retail",
+        location: p.address?.line1 || p.location || "",
+        city: p.address?.city || p.city || "",
+        status: statusMap[p.status] || (p.status?.toLowerCase() as Partner["status"]) || "pending",
+        performanceScore: p.performanceScore ?? p.metrics?.rating ? Math.round(p.metrics.rating * 20) : 0,
+        totalRevenue: p.totalRevenue ?? p.metrics?.totalRevenue ?? 0,
+        monthlyRevenue: p.monthlyRevenue ?? 0,
+        joinDate: p.joinDate || p.createdAt || new Date().toISOString(),
+        contactPerson: p.contactPerson || "—",
+        phone: p.phone || "—",
+        email: p.email || "—",
+        deliveryRadius: p.deliveryRadius ?? 0,
+        avgRating: p.avgRating ?? p.metrics?.rating ?? 0,
+    };
+};

@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,25 +10,84 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
-import { RefreshCw, CheckCircle, XCircle, AlertCircle, Search, Settings, Activity, FileJson, Server, ArrowRightLeft } from "lucide-react";
-import { mockSyncLogs, mockTallyConfig } from "./mockData";
+import { Loader2, RefreshCw, CheckCircle, XCircle, AlertCircle, Search, Settings, Activity, FileJson, Server, ArrowRightLeft } from "lucide-react";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+
+interface TallySyncLog {
+    id: string;
+    type: string;
+    status: string;
+    recordsSynced: number;
+    timestamp: string;
+    details: string;
+    user: string;
+}
+
+interface TallyConfig {
+    connectionStatus: string;
+    lastSyncTime: string;
+    companyName: string;
+    tallyVersion: string;
+    autoSync: boolean;
+}
 
 const TallyIntegration = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all-status");
     const [isSyncing, setIsSyncing] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [logs, setLogs] = useState<TallySyncLog[]>([]);
+    const [config, setConfig] = useState<TallyConfig>({
+        connectionStatus: "disconnected",
+        lastSyncTime: new Date().toISOString(),
+        companyName: "—",
+        tallyVersion: "—",
+        autoSync: true
+    });
 
-    const filteredLogs = mockSyncLogs.filter((log) => {
+    const fetchData = useCallback(async () => {
+        try {
+            setLoading(true);
+            const token = localStorage.getItem("token");
+            const headers = { Authorization: `Bearer ${token}` };
+            const res = await axios.get(`${API_BASE}/api/payments/tally/logs`, { headers });
+            const raw = res.data?.data || [];
+            setLogs(raw);
+            if (res.data?.config) {
+                setConfig(res.data.config);
+            }
+        } catch (err: any) {
+            console.error("Fetch Tally logs error:", err);
+            toast.error(err?.response?.data?.message || "Failed to load Tally sync logs");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    const handleSync = async () => {
+        try {
+            setIsSyncing(true);
+            const token = localStorage.getItem("token");
+            const headers = { Authorization: `Bearer ${token}` };
+            const res = await axios.post(`${API_BASE}/api/payments/tally/sync`, { type: 'invoice' }, { headers });
+            toast.success(res.data?.message || "Sync completed successfully");
+            fetchData();
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || "Sync failed");
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const filteredLogs = logs.filter((log) => {
         const matchesSearch = log.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
             log.type.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesStatus = statusFilter === "all-status" || log.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
-
-    const handleSync = () => {
-        setIsSyncing(true);
-        setTimeout(() => setIsSyncing(false), 2000);
-    };
 
     return (
         <div className="space-y-7">
@@ -46,7 +107,7 @@ const TallyIntegration = () => {
                             onClick={handleSync}
                             disabled={isSyncing}
                         >
-                            <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+                            {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                             {isSyncing ? "Syncing..." : "Sync Now"}
                         </Button>
                     </div>
@@ -58,18 +119,18 @@ const TallyIntegration = () => {
                 <Card className="rounded-2xl border-border/70 bg-card/95 shadow-card">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">Connection Status</CardTitle>
-                        <Server className={`h-4 w-4 ${mockTallyConfig.connectionStatus === 'connected' ? 'text-success' : 'text-error'}`} />
+                        <Server className={`h-4 w-4 ${config.connectionStatus === 'connected' ? 'text-success' : 'text-error'}`} />
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold capitalize flex items-center gap-2">
-                            {mockTallyConfig.connectionStatus}
+                            {config.connectionStatus}
                             <span className="relative flex h-3 w-3">
-                                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${mockTallyConfig.connectionStatus === 'connected' ? 'bg-success' : 'bg-error'}`}></span>
-                                <span className={`relative inline-flex rounded-full h-3 w-3 ${mockTallyConfig.connectionStatus === 'connected' ? 'bg-success' : 'bg-error'}`}></span>
+                                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${config.connectionStatus === 'connected' ? 'bg-success' : 'bg-error'}`}></span>
+                                <span className={`relative inline-flex rounded-full h-3 w-3 ${config.connectionStatus === 'connected' ? 'bg-success' : 'bg-error'}`}></span>
                             </span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                            {mockTallyConfig.companyName} ({mockTallyConfig.tallyVersion})
+                            {config.companyName} ({config.tallyVersion})
                         </p>
                     </CardContent>
                 </Card>
@@ -79,9 +140,9 @@ const TallyIntegration = () => {
                         <Activity className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{new Date(mockTallyConfig.lastSyncTime).toLocaleTimeString()}</div>
+                        <div className="text-2xl font-bold">{config.lastSyncTime ? new Date(config.lastSyncTime).toLocaleTimeString() : "—"}</div>
                         <p className="text-xs text-muted-foreground mt-1">
-                            {new Date(mockTallyConfig.lastSyncTime).toLocaleDateString()}
+                            {config.lastSyncTime ? new Date(config.lastSyncTime).toLocaleDateString() : "Never"}
                         </p>
                     </CardContent>
                 </Card>
@@ -92,8 +153,8 @@ const TallyIntegration = () => {
                     </CardHeader>
                     <CardContent>
                         <div className="flex items-center space-x-2">
-                            <Switch checked={mockTallyConfig.autoSync} />
-                            <span className="text-sm font-medium">{mockTallyConfig.autoSync ? "Enabled" : "Disabled"}</span>
+                            <Switch checked={config.autoSync} />
+                            <span className="text-sm font-medium">{config.autoSync ? "Enabled" : "Disabled"}</span>
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
                             Syncs every 1 hour
@@ -147,8 +208,10 @@ const TallyIntegration = () => {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredLogs.length === 0 ? (
-                                    <TableRow><TableCell colSpan={7} className="h-24 text-center">No logs found.</TableCell></TableRow>
+                                {loading ? (
+                                    <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
+                                ) : filteredLogs.length === 0 ? (
+                                    <TableRow><TableCell colSpan={7} className="h-24 text-center text-muted-foreground">No logs found.</TableCell></TableRow>
                                 ) : (
                                     filteredLogs.map((log) => (
                                         <TableRow key={log.id} className="hover:bg-muted/20">
@@ -169,7 +232,7 @@ const TallyIntegration = () => {
                                                 </div>
                                             </TableCell>
                                             <TableCell><span className="font-medium">{log.recordsSynced}</span></TableCell>
-                                            <TableCell><span className="text-sm text-muted-foreground">{new Date(log.timestamp).toLocaleString()}</span></TableCell>
+                                            <TableCell><span className="text-sm text-muted-foreground">{log.timestamp ? new Date(log.timestamp).toLocaleString() : "—"}</span></TableCell>
                                             <TableCell><span className="text-sm text-muted-foreground max-w-[200px] truncate block" title={log.details}>{log.details}</span></TableCell>
                                             <TableCell><span className="text-xs bg-muted px-2 py-1 rounded-full">{log.user}</span></TableCell>
                                         </TableRow>

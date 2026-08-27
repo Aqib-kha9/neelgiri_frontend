@@ -31,14 +31,23 @@ class ApiClient {
     }
   }
 
-  private async getAuthHeaders(): Promise<HeadersInit> {
+  private async getAuthHeaders(
+    includeJsonContentType = true,
+    includeAuthorization = true
+  ): Promise<HeadersInit> {
     const session = await this.getSession();
-    const headers: HeadersInit = {
-      "Content-Type": "application/json",
-    };
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("token") || session?.token
+        : session?.token;
+    const headers: HeadersInit = {};
 
-    if (session?.token) {
-      headers.Authorization = `Bearer ${session.token}`;
+    if (includeJsonContentType) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    if (includeAuthorization && token) {
+      headers.Authorization = `Bearer ${token}`;
     }
 
     return headers;
@@ -55,7 +64,10 @@ class ApiClient {
     } = options;
 
     const url = `${this.baseURL}${endpoint}`;
-    const headers = await this.getAuthHeaders();
+    const headers = await this.getAuthHeaders(
+      !(fetchOptions.body instanceof FormData),
+      requireAuth
+    );
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -106,7 +118,7 @@ class ApiClient {
     return this.request<T>(endpoint, {
       ...options,
       method: "POST",
-      body: JSON.stringify(data),
+      body: data instanceof FormData ? data : JSON.stringify(data),
     });
   }
 

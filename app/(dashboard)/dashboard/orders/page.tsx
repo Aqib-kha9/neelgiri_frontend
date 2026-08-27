@@ -37,11 +37,11 @@ interface Shipment {
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
     not_scheduled: { label: "Booked", color: "bg-blue-50 text-blue-700 border-blue-200", icon: Clock },
-    scheduled:     { label: "Scheduled", color: "bg-purple-50 text-purple-700 border-purple-200", icon: Truck },
-    in_progress:   { label: "In Transit", color: "bg-amber-50 text-amber-700 border-amber-200", icon: Truck },
-    complete:      { label: "Delivered", color: "bg-green-50 text-green-700 border-green-200", icon: CheckCircle2 },
-    delivered:     { label: "Delivered", color: "bg-green-50 text-green-700 border-green-200", icon: CheckCircle2 },
-    cancelled:     { label: "Cancelled", color: "bg-red-50 text-red-700 border-red-200", icon: XCircle },
+    scheduled: { label: "Scheduled", color: "bg-purple-50 text-purple-700 border-purple-200", icon: Truck },
+    in_progress: { label: "In Transit", color: "bg-amber-50 text-amber-700 border-amber-200", icon: Truck },
+    complete: { label: "Delivered", color: "bg-green-50 text-green-700 border-green-200", icon: CheckCircle2 },
+    delivered: { label: "Delivered", color: "bg-green-50 text-green-700 border-green-200", icon: CheckCircle2 },
+    cancelled: { label: "Cancelled", color: "bg-red-50 text-red-700 border-red-200", icon: XCircle },
 };
 
 export default function OrdersPage() {
@@ -137,7 +137,7 @@ export default function OrdersPage() {
                         <p className="text-sm mt-1">Your bookings will appear here once created</p>
                     </div>
                     <Button asChild size="sm">
-                        <Link href="/dashboard/create-booking">Create First Booking</Link>
+                        <Link href="/dashboard/booking/create">Create First Booking</Link>
                     </Button>
                 </div>
             ) : (

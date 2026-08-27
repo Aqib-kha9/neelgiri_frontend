@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import axios from "axios";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiClient } from "@/lib/api-client";
+import { shipmentApi } from "@/lib/api-services";
 import {
     User,
     MapPin,
@@ -123,8 +124,13 @@ export default function PublicBookingForm() {
 
     const checkServiceability = async (pincode: string) => {
         try {
-            const { data } = await axios.get(`/api/pincodes/check/${pincode}`);
-            return data;
+            return await apiClient.get<{
+                city?: string;
+                officeName?: string;
+                state?: string;
+                zone?: string;
+                isODA?: boolean;
+            }>(`/pincodes/check/${pincode}`);
         } catch (error) {
             return null;
         }
@@ -204,8 +210,7 @@ export default function PublicBookingForm() {
         if (!formData.weight || !pincodeData.pickup || !pincodeData.delivery) return;
 
         try {
-            const token = localStorage.getItem("token");
-            const { data } = await axios.post("/api/rates/calculate", {
+            const data = await apiClient.post("/rates/calculate", {
                 originZone: pincodeData.pickup.zone || "NORTH",
                 destinationZone: pincodeData.delivery.zone || "NORTH",
                 weight: parseFloat(formData.weight),
@@ -215,8 +220,6 @@ export default function PublicBookingForm() {
                 rateCardId: (session?.user as any)?.rateCard,
                 declaredValue: parseFloat(formData.declaredValue || "0"),
                 isODA: pincodeData.delivery.isODA || false
-            }, {
-                headers: { Authorization: `Bearer ${token}` }
             });
             setCalculatedRates(data);
         } catch (error) {
@@ -238,15 +241,66 @@ export default function PublicBookingForm() {
         return 0;
     };
 
-    const handleSubmit = () => {
-        if (!formData.agreedToTerms) return;
+    const handleSubmit = async () => {
+        if (!formData.agreedToTerms) {
+            setValidationError("Please accept the booking terms before continuing.");
+            return;
+        }
+
+        const bookingMode = formData.serviceType === "express" ? "AIR" : "SURFACE";
+
         setIsSubmitting(true);
-        // Simulate API call
-        setTimeout(() => {
-            const mockAWB = "NGL-" + Math.floor(100000 + Math.random() * 900000);
-            setBookingSuccess(mockAWB);
+        setValidationError(null);
+
+        try {
+            const response = await shipmentApi.book({
+                sender: {
+                    name: formData.senderName,
+                    phone: formData.senderPhone,
+                    address: `${formData.senderAddressLine1}${formData.senderAddressLine2 ? ", " + formData.senderAddressLine2 : ""}${formData.senderLandmark ? " (Landmark: " + formData.senderLandmark + ")" : ""}`,
+                    pincode: formData.senderPincode,
+                    city: formData.senderCity,
+                    state: formData.senderState,
+                    email: formData.senderEmail,
+                    gstin: ""
+                },
+                receiver: {
+                    name: formData.receiverName,
+                    phone: formData.receiverPhone,
+                    address: `${formData.receiverAddressLine1}${formData.receiverAddressLine2 ? ", " + formData.receiverAddressLine2 : ""}${formData.receiverLandmark ? " (Landmark: " + formData.receiverLandmark + ")" : ""}`,
+                    pincode: formData.receiverPincode,
+                    city: formData.receiverCity,
+                    state: formData.receiverState,
+                    email: formData.receiverEmail,
+                    gstin: ""
+                },
+                weight: parseFloat(formData.weight),
+                dimensions: {
+                    length: parseFloat(formData.length) || 0,
+                    width: parseFloat(formData.width) || 0,
+                    height: parseFloat(formData.height) || 0
+                },
+                contents: formData.contents,
+                paymentMode: "prepaid",
+                codAmount: 0,
+                declaredValue: parseFloat(formData.declaredValue) || 0,
+                mode: bookingMode,
+                termsAccepted: formData.agreedToTerms,
+                termsVersion: "2026-08-21"
+            });
+
+            const awb = response.awb || (response.shipment as { awb?: string })?.awb;
+            if (!awb) {
+                throw new Error("The booking was created without an AWB number.");
+            }
+            setBookingSuccess(awb);
+        } catch (error: any) {
+            const message = error?.response?.data?.message || error?.message || "Booking failed. Please try again.";
+            setValidationError(message);
+            toast.error(message);
+        } finally {
             setIsSubmitting(false);
-        }, 1500);
+        }
     };
 
     if (bookingSuccess) {

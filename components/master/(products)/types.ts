@@ -1,5 +1,6 @@
 // components/master/products/types.ts
 export interface Product {
+  _id?: string;
   id: string;
   sku: string;
   name: string;
@@ -18,6 +19,15 @@ export interface Product {
   status: "active" | "inactive";
   createdAt: string;
   updatedAt: string;
+  // Backend fields
+  barcode?: string;
+  dimensionString?: string;
+  customerId?: string;
+  handlingFlags?: {
+    fragile?: boolean;
+    hazardous?: boolean;
+    temperatureSensitive?: boolean;
+  };
 }
 
 export interface ProductFormData {

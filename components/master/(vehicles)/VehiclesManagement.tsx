@@ -1,16 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import VehiclesHeader from "./VehiclesHeader";
 import VehiclesStats from "./VehiclesStats";
 import VehiclesFilters from "./VehiclesFilters";
 import VehiclesList from "./VehiclesList";
-import VehicleForm from "./VehicleForm"; // Import the form
+import VehicleForm from "./VehicleForm";
 import { Vehicle, VehicleFormData } from "./types";
-import { mockVehicles } from "./mockData";
 
 const VehiclesManagement = () => {
-    const [vehicles, setVehicles] = useState<Vehicle[]>(mockVehicles);
+    const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState("ALL");
     const [typeFilter, setTypeFilter] = useState("ALL");
@@ -18,16 +20,39 @@ const VehiclesManagement = () => {
     // Form State
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+    const [submitting, setSubmitting] = useState(false);
 
-    const filteredVehicles = vehicles.filter((v) => {
-        const matchesSearch = v.regNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            v.driverName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            v.make.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesStatus = statusFilter === "ALL" || v.status === statusFilter;
-        const matchesType = typeFilter === "ALL" || v.type === typeFilter;
+    const fetchVehicles = useCallback(async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem("token");
+            const params: Record<string, string> = {};
+            if (searchTerm) params.search = searchTerm;
+            if (statusFilter !== "ALL") params.status = statusFilter;
+            if (typeFilter !== "ALL") params.type = typeFilter;
 
-        return matchesSearch && matchesStatus && matchesType;
-    });
+            const { data } = await axios.get("/api/vehicles", {
+                params,
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            // Map MongoDB _id to id for frontend compatibility
+            const mapped = (Array.isArray(data) ? data : data.data || []).map((v: any) => ({
+                ...v,
+                id: v._id || v.id,
+            }));
+            setVehicles(mapped);
+        } catch (error) {
+            console.error("Failed to load vehicles", error);
+            toast.error("Failed to load vehicles");
+        } finally {
+            setLoading(false);
+        }
+    }, [searchTerm, statusFilter, typeFilter]);
+
+    useEffect(() => {
+        fetchVehicles();
+    }, [fetchVehicles]);
 
     const handleAddVehicle = () => {
         setEditingVehicle(null);
@@ -39,25 +64,46 @@ const VehiclesManagement = () => {
         setIsFormOpen(true);
     };
 
-    const handleDeleteVehicle = (id: string) => {
-        if (confirm("Are you sure you want to delete this vehicle?")) {
-            setVehicles(prev => prev.filter(v => v.id !== id));
+    const handleDeleteVehicle = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this vehicle?")) return;
+        try {
+            const token = localStorage.getItem("token");
+            await axios.delete(`/api/vehicles/${id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            toast.success("Vehicle deleted successfully");
+            fetchVehicles();
+        } catch (error) {
+            console.error("Delete failed", error);
+            toast.error("Failed to delete vehicle");
         }
     };
 
-    const handleFormSubmit = (data: VehicleFormData) => {
-        if (editingVehicle) {
-            // Update existing
-            setVehicles(prev => prev.map(v => v.id === editingVehicle.id ? { ...v, ...data } : v));
-        } else {
-            // Add new
-            const newVehicle: Vehicle = {
-                id: `V${Date.now()}`, // Simple ID generation
-                ...data
-            } as Vehicle; // Type assertion since form data matches
-            setVehicles(prev => [newVehicle, ...prev]);
+    const handleFormSubmit = async (formData: VehicleFormData) => {
+        setSubmitting(true);
+        try {
+            const token = localStorage.getItem("token");
+            const payload = { ...formData };
+
+            if (editingVehicle) {
+                await axios.put(`/api/vehicles/${editingVehicle.id}`, payload, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                toast.success("Vehicle updated successfully");
+            } else {
+                await axios.post("/api/vehicles", payload, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                toast.success("Vehicle created successfully");
+            }
+            setIsFormOpen(false);
+            fetchVehicles();
+        } catch (error: any) {
+            console.error("Form submit failed", error);
+            toast.error(error?.response?.data?.message || "Failed to save vehicle");
+        } finally {
+            setSubmitting(false);
         }
-        setIsFormOpen(false);
     };
 
     return (
@@ -78,11 +124,17 @@ const VehiclesManagement = () => {
                 onTypeChange={setTypeFilter}
             />
 
-            <VehiclesList
-                vehicles={filteredVehicles}
-                onEdit={handleEditVehicle}
-                onDelete={handleDeleteVehicle}
-            />
+            {loading ? (
+                <div className="flex items-center justify-center py-16">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+            ) : (
+                <VehiclesList
+                    vehicles={vehicles}
+                    onEdit={handleEditVehicle}
+                    onDelete={handleDeleteVehicle}
+                />
+            )}
 
             <VehicleForm
                 open={isFormOpen}

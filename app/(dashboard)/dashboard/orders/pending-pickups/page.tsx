@@ -1,5 +1,9 @@
-import { PendingPickups } from "@/components/booking/pending-pickups/PendingPickups";
+import PickupRequests from "@/components/customers/(pickup-requests)/PickupRequests";
 
 export default function PendingPickupsPage() {
-  return <PendingPickups />;
+  return (
+    <div className="container py-6">
+      <PickupRequests />
+    </div>
+  );
 }

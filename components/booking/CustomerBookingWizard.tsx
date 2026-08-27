@@ -28,6 +28,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiClient } from "@/lib/api-client";
+import { shipmentApi } from "@/lib/api-services";
 
 // Extracted Wizard Components
 import { WizardHeader } from "./wizard-parts/WizardHeader";
@@ -50,6 +52,8 @@ export default function CustomerBookingWizard() {
     const { session } = useAuth();
     const router = useRouter();
     const [currentStep, setCurrentStep] = useState(1);
+    const bookingIdempotencyKey = useRef<string>("");
+    const quoteRequestSequence = useRef(0);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [bookingSuccess, setBookingSuccess] = useState<null | string>(null);
     const [validationError, setValidationError] = useState<string | null>(null);
@@ -120,94 +124,102 @@ export default function CustomerBookingWizard() {
 
     // No auto pre-fill — form starts blank, user fills manually or picks from Address Book
 
-    // Update pricing when dimensions or weight change
+    if (!bookingIdempotencyKey.current) {
+        bookingIdempotencyKey.current = typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `booking-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+
+    // Update pricing when dimensions, service, payment, or insurance inputs change.
     useEffect(() => {
+        const requestSequence = ++quoteRequestSequence.current;
+        let active = true;
+
         const fetchPricing = async () => {
-            if (!formData.weight || !formData.receiverPincode || formData.receiverPincode?.length < 6 || !formData.senderPincode || formData.senderPincode?.length < 6) {
+            if (!/^\d{6}$/.test(formData.receiverPincode) || !/^\d{6}$/.test(formData.senderPincode)) {
                 return;
             }
 
-            // Calculate Volumetric Weight for UI hint
             const length = parseFloat(formData.length) || 0;
             const breadth = parseFloat(formData.breadth) || 0;
             const height = parseFloat(formData.height) || 0;
             const weight = parseFloat(formData.weight) || 0;
+            if (weight <= 0) return;
+
             const divisor = session?.user?.volumetricWeightDivisor || 5000;
             const volWeight = (length * breadth * height) / divisor;
             const chargeable = Math.max(weight, volWeight);
 
             setPricing(p => ({ ...p, volumetricWeight: volWeight, chargeableWeight: chargeable }));
-
             setIsPricingLoading(true);
+
             try {
-                const token = localStorage.getItem("token");
-                const response = await fetch("/api/rates/calculate", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${token}`,
-                    },
-                    body: JSON.stringify({
-                        weight: weight,
-                        length: length,
-                        breadth: breadth,
-                        height: height,
-                        serviceType: formData.mode,
-                        destPincode: formData.receiverPincode,
-                        sourcePincode: formData.senderPincode,
-                        declaredValue: parseFloat(formData.declaredValue) || 0,
-                        fovPercentage: parseFloat(formData.fovPercentage) || null, // SEND OVERRIDE
-                        insuranceRequested: (parseFloat(formData.declaredValue) || 0) > 0, // Auto-request if value declared
-                        customerType: session?.user?.role === 'customer' ? 'CUSTOMER' : 'WALK-IN'
-                    }),
+                const data = await apiClient.post<any>("/rates/calculate", {
+                    weight,
+                    length,
+                    breadth,
+                    height,
+                    serviceType: formData.mode,
+                    destPincode: formData.receiverPincode,
+                    sourcePincode: formData.senderPincode,
+                    declaredValue: parseFloat(formData.declaredValue) || 0,
+                    paymentMode: formData.paymentMode,
+                    codAmount: formData.paymentMode === "cod"
+                        ? parseFloat(formData.codAmount) || 0
+                        : 0,
+                    insuranceRequested: formData.insuranceRequired === true,
+                    fovPercentage: formData.insuranceRequired
+                        ? parseFloat(formData.fovPercentage) || null
+                        : null
                 });
 
-                const data = await response.json();
-                if (response.ok) {
-                    setPricing({
-                        baseFreight: data.baseFreight,
-                        taxAmount: data.gstAmount,
-                        netAmount: data.totalAmount,
-                        chargeableWeight: data.chargeableWeight,
-                        fuelSurcharge: data.fuelSurcharge || 0,
-                        odaSurcharge: data.odaSurcharge || 0,
-                        insuranceAmount: data.fovCharge || 0, // MAP fovCharge to insuranceAmount
-                        gstRate: data.gstRate || 18,
-                        volumetricWeight: volWeight,
-                        codCharge: data.codCharge || 0
-                    });
-                    setValidationError(null);
-                } else {
-                    setValidationError(data.message || "Pricing calculation failed");
-                }
+                if (!active || requestSequence !== quoteRequestSequence.current) return;
+
+                setPricing({
+                    baseFreight: data.baseFreight,
+                    taxAmount: data.gstAmount,
+                    netAmount: data.totalAmount,
+                    chargeableWeight: data.chargeableWeight,
+                    fuelSurcharge: data.fuelSurcharge || 0,
+                    odaSurcharge: data.odaSurcharge || 0,
+                    insuranceAmount: data.fovCharge || 0,
+                    gstRate: data.gstRate || 18,
+                    volumetricWeight: volWeight,
+                    codCharge: data.codCharge || 0
+                });
             } catch (err) {
-                console.error("Pricing error:", err);
+                if (active && requestSequence === quoteRequestSequence.current) {
+                    setValidationError(err instanceof Error ? err.message : "Unable to calculate a quote for this route.");
+                }
             } finally {
-                setIsPricingLoading(false);
+                if (active && requestSequence === quoteRequestSequence.current) {
+                    setIsPricingLoading(false);
+                }
             }
         };
 
-        const timer = setTimeout(() => {
-            fetchPricing();
-        }, 800);
+        const timer = setTimeout(() => void fetchPricing(), 800);
 
-        return () => clearTimeout(timer);
-    }, [formData.weight, formData.length, formData.breadth, formData.height, formData.mode, formData.declaredValue, formData.receiverPincode, formData.senderPincode, formData.insuranceRequired, session]);
+        return () => {
+            active = false;
+            clearTimeout(timer);
+        };
+    }, [formData.weight, formData.length, formData.breadth, formData.height, formData.mode, formData.declaredValue, formData.fovPercentage, formData.receiverPincode, formData.senderPincode, formData.insuranceRequired, formData.paymentMode, formData.codAmount, session]);
 
     // Pincode lookup for Sender City/State
     useEffect(() => {
         if (formData.senderPincode?.length === 6) {
             const fetchPincodeDetails = async () => {
                 try {
-                    const response = await fetch(`/api/pincodes/check/${formData.senderPincode}`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        setFormData(prev => ({
-                            ...prev,
-                            senderCity: data.district || data.city || "",
-                            senderState: data.state || ""
-                        }));
-                    }
+                    const data = await apiClient.get<any>(
+                        `/pincodes/check/${formData.senderPincode}`,
+                        { requireAuth: false }
+                    );
+                    setFormData(prev => ({
+                        ...prev,
+                        senderCity: data.district || data.city || "",
+                        senderState: data.state || ""
+                    }));
                 } catch (err) {
                     console.error("Sender Pincode lookup failed:", err);
                 }
@@ -221,15 +233,15 @@ export default function CustomerBookingWizard() {
         if (formData.receiverPincode?.length === 6) {
             const fetchPincodeDetails = async () => {
                 try {
-                    const response = await fetch(`/api/pincodes/check/${formData.receiverPincode}`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        setFormData(prev => ({
-                            ...prev,
-                            receiverCity: data.district || data.city || "",
-                            receiverState: data.state || ""
-                        }));
-                    }
+                    const data = await apiClient.get<any>(
+                        `/pincodes/check/${formData.receiverPincode}`,
+                        { requireAuth: false }
+                    );
+                    setFormData(prev => ({
+                        ...prev,
+                        receiverCity: data.district || data.city || "",
+                        receiverState: data.state || ""
+                    }));
                 } catch (err) {
                     console.error("Receiver Pincode lookup failed:", err);
                 }
@@ -247,19 +259,8 @@ export default function CustomerBookingWizard() {
         const uploadData = new FormData();
         files.forEach(file => uploadData.append('files', file));
 
-        const token = session?.token || (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
-
         try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/shipments/upload`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
-                body: uploadData
-            });
-
-            if (!response.ok) throw new Error('Upload failed');
-            const data = await response.json();
+            const data = await apiClient.post<{ files: any[] }>("/shipments/upload", uploadData);
             const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
             return data.files.map((f: any) => ({
                 ...f,
@@ -300,25 +301,60 @@ export default function CustomerBookingWizard() {
         }
     };
 
+    const validateParty = (prefix: "sender" | "receiver") => {
+        const label = prefix === "sender" ? "Sender" : "Receiver";
+        const name = formData[`${prefix}Name`];
+        const phone = formData[`${prefix}Phone`];
+        const pincode = formData[`${prefix}Pincode`];
+        const address = formData[`${prefix}AddressLine1`];
+        const email = formData[`${prefix}Email`];
+        const gstin = formData[prefix === "sender" ? "senderGstin" : "receiverGstin"];
+
+        if (!name.trim() || address.trim().length < 10) return `${label} name and a complete address are required.`;
+        if (!/^[6-9]\d{9}$/.test(phone.trim())) return `Enter a valid 10-digit Indian ${label.toLowerCase()} phone number.`;
+        if (!/^\d{6}$/.test(pincode.trim())) return `Enter a valid 6-digit ${label.toLowerCase()} pincode.`;
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return `Enter a valid ${label.toLowerCase()} email address.`;
+        if (gstin && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/i.test(gstin.trim())) return `Enter a valid ${label.toLowerCase()} GSTIN.`;
+        return null;
+    };
+
+    const validateParcel = () => {
+        const weight = Number(formData.weight);
+        const dimensions = [formData.length, formData.breadth, formData.height];
+        const suppliedDimensions = dimensions.filter((value) => String(value).trim() !== "");
+        const declaredValue = Number(formData.declaredValue || 0);
+
+        if (!Number.isFinite(weight) || weight <= 0 || weight > 10000) return "Weight must be greater than 0 and no more than 10,000 kg.";
+        if (!formData.contents.trim()) return "Parcel contents are required.";
+        if (suppliedDimensions.length > 0 && (suppliedDimensions.length !== 3 || dimensions.some((value) => Number(value) <= 0))) return "Enter all three dimensions as positive values, or leave all dimensions blank.";
+        if (!Number.isFinite(declaredValue) || declaredValue < 0) return "Declared value cannot be negative.";
+        if (formData.insuranceRequired && declaredValue <= 0) return "Declared value must be greater than zero when insurance is selected.";
+        if (formData.insuranceRequired && formData.fovPercentage && (Number(formData.fovPercentage) <= 0 || Number(formData.fovPercentage) > 100)) return "FOV percentage must be greater than 0 and no more than 100.";
+        return null;
+    };
+
+    const validateService = () => {
+        if (formData.paymentMode === "cod" && (!Number.isFinite(Number(formData.codAmount)) || Number(formData.codAmount) <= 0)) return "Enter a valid COD collection amount.";
+        if (formData.eWayBill && !/^\d{12}$/.test(formData.eWayBill.trim())) return "E-Way Bill number must contain exactly 12 digits.";
+        if ((formData.attachments || []).length > 10) return "A maximum of 10 attachments is allowed.";
+        if (!formData.agreedToTerms) return "Please accept the terms and conditions before booking.";
+        return null;
+    };
+
     const handleNextStep = () => {
-        if (currentStep === 1) {
-            if (!formData.senderName || !formData.senderPhone || !formData.senderPincode || !formData.senderAddressLine1) {
-                setValidationError("Please fill in all required sender details.");
-                return;
-            }
+        const error = currentStep === 1
+            ? validateParty("sender")
+            : currentStep === 2
+                ? validateParty("receiver")
+                : currentStep === 3
+                    ? validateParcel()
+                    : null;
+
+        if (error) {
+            setValidationError(error);
+            return;
         }
-        if (currentStep === 2) {
-            if (!formData.receiverName || !formData.receiverPhone || !formData.receiverPincode || !formData.receiverAddressLine1) {
-                setValidationError("Please fill in all required receiver details.");
-                return;
-            }
-        }
-        if (currentStep === 3) {
-            if (!formData.weight || parseFloat(formData.weight) <= 0) {
-                setValidationError("Please enter a valid weight.");
-                return;
-            }
-        }
+
         setValidationError(null);
         setCurrentStep(prev => Math.min(prev + 1, 4));
     };
@@ -329,73 +365,81 @@ export default function CustomerBookingWizard() {
     };
 
     const handleSubmit = async () => {
-        if (!formData.agreedToTerms) return;
-        
-
+        const error = validateParty("sender") || validateParty("receiver") || validateParcel() || validateService();
+        if (error) {
+            setValidationError(error);
+            return;
+        }
 
         setIsSubmitting(true);
         setValidationError(null);
 
         try {
-            const token = localStorage.getItem("token");
-            const response = await fetch("/api/shipments/book", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
+            const data = await shipmentApi.book({
+                sender: {
+                    name: formData.senderName,
+                    phone: formData.senderPhone,
+                    address: `${formData.senderAddressLine1}${formData.senderAddressLine2 ? ', ' + formData.senderAddressLine2 : ''}${formData.senderLandmark ? ' (Landmark: ' + formData.senderLandmark + ')' : ''}`,
+                    pincode: formData.senderPincode,
+                    city: formData.senderCity,
+                    state: formData.senderState,
+                    email: formData.senderEmail,
+                    gstin: formData.senderGstin
                 },
-                body: JSON.stringify({
-                    sender: {
-                        name: formData.senderName,
-                        phone: formData.senderPhone,
-                        address: `${formData.senderAddressLine1}${formData.senderAddressLine2 ? ', ' + formData.senderAddressLine2 : ''}${formData.senderLandmark ? ' (Landmark: ' + formData.senderLandmark + ')' : ''}`,
-                        pincode: formData.senderPincode,
-                        city: formData.senderCity,
-                        state: formData.senderState,
-                        email: formData.senderEmail,
-                        gstin: formData.senderGstin
-                    },
-                    receiver: {
-                        name: formData.receiverName,
-                        phone: formData.receiverPhone,
-                        address: `${formData.receiverAddressLine1}${formData.receiverAddressLine2 ? ', ' + formData.receiverAddressLine2 : ''}${formData.receiverLandmark ? ' (Landmark: ' + formData.receiverLandmark + ')' : ''}`,
-                        pincode: formData.receiverPincode,
-                        city: formData.receiverCity,
-                        state: formData.receiverState,
-                        email: formData.receiverEmail,
-                        gstin: formData.receiverGstin
-                    },
-                    weight: parseFloat(formData.weight),
-                    dimensions: {
-                        length: parseFloat(formData.length) || 0,
-                        width: parseFloat(formData.breadth) || 0,
-                        height: parseFloat(formData.height) || 0
-                    },
-                    contents: formData.contents,
-                    paymentMode: formData.paymentMode,
-                    codAmount: 0,
-                    declaredValue: parseFloat(formData.declaredValue) || 0,
-                    mode: formData.mode,
-                    senderInvoiceNo: formData.senderInvoiceNo,
-                    eWayBill: formData.eWayBill,
-                    additionalDocNos: formData.additionalDocNos ? formData.additionalDocNos.split(',').map(s => s.trim()) : [],
-                    attachments: formData.attachments.map((a: any) => ({
-                        url: a.url,
-                        originalname: a.name,
-                        category: a.type === 'parcel_photo' ? 'parcel' : 'invoice'
-                    }))
-                }),
+                receiver: {
+                    name: formData.receiverName,
+                    phone: formData.receiverPhone,
+                    address: `${formData.receiverAddressLine1}${formData.receiverAddressLine2 ? ', ' + formData.receiverAddressLine2 : ''}${formData.receiverLandmark ? ' (Landmark: ' + formData.receiverLandmark + ')' : ''}`,
+                    pincode: formData.receiverPincode,
+                    city: formData.receiverCity,
+                    state: formData.receiverState,
+                    email: formData.receiverEmail,
+                    gstin: formData.receiverGstin
+                },
+                weight: parseFloat(formData.weight),
+                dimensions: {
+                    length: parseFloat(formData.length) || 0,
+                    width: parseFloat(formData.breadth) || 0,
+                    height: parseFloat(formData.height) || 0
+                },
+                contents: formData.contents.trim(),
+                packageType: formData.packageType as "BOX" | "DOCUMENT" | "PALLET",
+                category: formData.category.trim() || "General",
+                isFragile: formData.isFragile === true,
+                insuranceRequired: formData.insuranceRequired === true,
+                fovPercentage: formData.insuranceRequired
+                    ? parseFloat(formData.fovPercentage) || null
+                    : null,
+                paymentMode: formData.paymentMode as "prepaid" | "cod" | "topay" | "credit",
+                codAmount: formData.paymentMode === 'cod'
+                    ? parseFloat(formData.codAmount) || 0
+                    : 0,
+                declaredValue: parseFloat(formData.declaredValue) || 0,
+                mode: formData.mode as "SURFACE" | "AIR",
+                senderInvoiceNo: formData.senderInvoiceNo.trim() || undefined,
+                eWayBill: formData.eWayBill.trim() || undefined,
+                additionalDocNos: formData.additionalDocNos
+                    ? formData.additionalDocNos.split(',').map(s => s.trim()).filter(Boolean)
+                    : [],
+                attachments: formData.attachments.map((attachment: any) => ({
+                    url: attachment.url,
+                    type: attachment.type,
+                    originalname: attachment.originalname || attachment.name,
+                    mimetype: attachment.mimetype,
+                    size: Number(attachment.size)
+                })),
+                termsAccepted: formData.agreedToTerms === true,
+                termsVersion: "2026-08-21",
+                idempotencyKey: bookingIdempotencyKey.current
             });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.message || "Failed to create booking");
-            }
 
             setBookingSuccess(data.awb);
             if (data.pricing) {
-                setPricing(data.pricing);
+                setPricing((current) => ({
+                    ...current,
+                    ...data.pricing,
+                    volumetricWeight: current.volumetricWeight,
+                }));
             }
 
             // Save to Master Data if requested
@@ -410,15 +454,8 @@ export default function CustomerBookingWizard() {
                         email: formData.receiverEmail
                     };
 
-                    await fetch(`/api/customers/${session.user.customerId}`, {
-                        method: "PUT",
-                        headers: {
-                            "Content-Type": "application/json",
-                            Authorization: `Bearer ${token}`,
-                        },
-                        body: JSON.stringify({
-                            receivers: [...(session.user.receivers || []), newReceiver]
-                        }),
+                    await apiClient.put(`/customers/${session.user.customerId}`, {
+                        receivers: [...(session.user.receivers || []), newReceiver]
                     });
                 } catch (err) {
                     console.error("Failed to save recipient to master data:", err);
@@ -433,28 +470,40 @@ export default function CustomerBookingWizard() {
 
     if (bookingSuccess) {
         return (
-            <div className="max-w-md mx-auto mt-12 space-y-6 animate-in fade-in duration-500">
-                <Card className="text-center p-8">
-                    <div className="mx-auto w-16 h-16 bg-green-50 text-green-600 rounded-full flex items-center justify-center mb-6">
-                        <CheckCircle2 className="h-8 w-8" />
+            <div className="mx-auto max-w-lg py-6 sm:py-10 animate-in fade-in duration-500">
+                <Card className="overflow-hidden rounded-2xl border-border/70 text-center shadow-sm">
+                    <div className="border-b bg-emerald-500/[0.06] px-5 py-8 sm:px-8">
+                        <div className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-full bg-emerald-500/10 text-emerald-600">
+                            <CheckCircle2 className="h-8 w-8" />
+                        </div>
+                        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-700">
+                            Shipment created
+                        </p>
+                        <h1 className="text-2xl font-semibold tracking-tight">Booking confirmed</h1>
+                        <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
+                            Your shipment is registered. Keep the AWB number below for tracking and support.
+                        </p>
                     </div>
-                    <h1 className="text-2xl font-semibold mb-2">Booking Confirmed</h1>
-                    <p className="text-muted-foreground text-sm mb-8">
-                        Your shipment has been successfully registered. You can track it using the AWB number below.
-                    </p>
 
-                    <div className="bg-muted/50 p-6 rounded-lg mb-8">
-                        <p className="text-sm font-medium text-muted-foreground mb-2">AWB NUMBER</p>
-                        <p className="text-2xl font-mono font-semibold text-primary">{bookingSuccess}</p>
-                    </div>
+                    <div className="space-y-5 p-5 sm:p-8">
+                        <div className="rounded-xl border bg-muted/30 p-5">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                                AWB number
+                            </p>
+                            <p className="mt-2 break-all font-mono text-2xl font-semibold tracking-tight text-primary">
+                                {bookingSuccess}
+                            </p>
+                        </div>
 
-                    <div className="flex flex-col gap-3">
-                        <Button className="w-full" onClick={() => router.push(`/dashboard/tracking?awb=${bookingSuccess}`)}>
-                            Track Shipment
-                        </Button>
-                        <Button variant="outline" className="w-full" onClick={() => window.location.reload()}>
-                            New Booking
-                        </Button>
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                            <Button className="w-full gap-2" onClick={() => router.push(`/dashboard/tracking?awb=${bookingSuccess}`)}>
+                                <ChevronRight className="h-4 w-4" />
+                                Track shipment
+                            </Button>
+                            <Button variant="outline" className="w-full" onClick={() => window.location.reload()}>
+                                Create another
+                            </Button>
+                        </div>
                     </div>
                 </Card>
             </div>
@@ -462,14 +511,14 @@ export default function CustomerBookingWizard() {
     }
 
     return (
-        <div className="space-y-8 pb-10">
+        <div className="mx-auto max-w-7xl space-y-4 pb-8 sm:space-y-5">
             <WizardHeader session={session} />
             <WizardStepper currentStep={currentStep} steps={STEPS} />
 
-            <div className="grid lg:grid-cols-12 gap-8 items-start">
+            <div className="grid items-start gap-4 lg:grid-cols-12 lg:gap-6">
                 <div className="lg:col-span-8">
-                    <Card className="flex flex-col min-h-[500px]">
-                        <CardHeader className="border-b px-6 py-4">
+                    <Card className="flex min-h-[500px] flex-col overflow-hidden rounded-2xl border-border/70 shadow-sm">
+                        <CardHeader className="border-b bg-card px-4 py-4 sm:px-6">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-primary/10 text-primary rounded-md">
                                     {(() => {
@@ -484,7 +533,7 @@ export default function CustomerBookingWizard() {
                             </div>
                         </CardHeader>
 
-                        <CardContent className="p-6 flex-1">
+                        <CardContent className="flex-1 p-4 sm:p-6">
                             {validationError && (
                                 <Alert variant="destructive" className="mb-6">
                                     <AlertTriangle className="h-4 w-4" />
@@ -494,64 +543,65 @@ export default function CustomerBookingWizard() {
                             )}
 
                             {currentStep === 1 && (
-                                <Step1Sender 
-                                    formData={formData} 
-                                    handleInputChange={handleInputChange} 
-                                    session={session} 
+                                <Step1Sender
+                                    formData={formData}
+                                    handleInputChange={handleInputChange}
+                                    session={session}
                                     setFormData={setFormData}
                                     selectSavedPickup={selectSavedPickup}
                                 />
                             )}
 
                             {currentStep === 2 && (
-                                <Step2Receiver 
-                                    formData={formData} 
-                                    handleInputChange={handleInputChange} 
-                                    session={session} 
+                                <Step2Receiver
+                                    formData={formData}
+                                    handleInputChange={handleInputChange}
+                                    session={session}
                                     selectSavedRecipient={selectSavedRecipient}
                                 />
                             )}
 
                             {currentStep === 3 && (
-                                <Step3Parcel 
-                                    formData={formData} 
-                                    handleInputChange={handleInputChange} 
-                                    pricing={pricing} 
+                                <Step3Parcel
+                                    formData={formData}
+                                    handleInputChange={handleInputChange}
+                                    pricing={pricing}
                                     session={session}
                                     uploadFiles={uploadFiles}
                                 />
                             )}
 
                             {currentStep === 4 && (
-                                <Step4Service 
-                                    formData={formData} 
-                                    handleInputChange={handleInputChange} 
-                                    session={session} 
+                                <Step4Service
+                                    formData={formData}
+                                    handleInputChange={handleInputChange}
+                                    session={session}
                                     uploadFiles={uploadFiles}
                                 />
                             )}
-                        </CardContent>          
+                        </CardContent>
 
-                        <CardFooter className="px-6 py-4 border-t flex items-center justify-between gap-4 bg-muted/20">
+                        <CardFooter className="sticky bottom-0 z-10 flex items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 shadow-[0_-4px_12px_-8px_rgba(0,0,0,0.25)] backdrop-blur sm:px-6 sm:py-4">
                             <Button
                                 variant="outline"
+                                className="gap-2"
                                 onClick={handleBack}
                                 disabled={currentStep === 1 || isSubmitting}
                             >
                                 Back
                             </Button>
 
-                            <div className="flex-1 max-w-[200px]">
+                            <div className="flex flex-1 justify-end">
                                 {currentStep < 4 ? (
                                     <Button
-                                        className="w-full"
+                                        className="w-full gap-2 sm:w-auto sm:min-w-[150px]"
                                         onClick={handleNextStep}
                                     >
                                         Next
                                     </Button>
                                 ) : (
                                     <Button
-                                        className="w-full"
+                                        className="w-full gap-2 sm:w-auto sm:min-w-[180px]"
                                         onClick={handleSubmit}
                                         disabled={!formData.agreedToTerms || isSubmitting}
                                     >
@@ -571,12 +621,12 @@ export default function CustomerBookingWizard() {
                 </div>
 
                 {/* Persistent Insights & Live Quote Terminal */}
-                <div className="lg:col-span-4 sticky top-6">
-                    <LiveQuoteSidebar 
-                        pricing={pricing} 
-                        formData={formData} 
-                        session={session} 
-                        isPricingLoading={isPricingLoading} 
+                <div className="lg:sticky lg:top-4 lg:col-span-4">
+                    <LiveQuoteSidebar
+                        pricing={pricing}
+                        formData={formData}
+                        session={session}
+                        isPricingLoading={isPricingLoading}
                     />
                 </div>
             </div>

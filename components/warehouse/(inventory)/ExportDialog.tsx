@@ -15,9 +15,10 @@ import { Download, FileDown } from "lucide-react";
 interface ExportDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    items?: any[];
 }
 
-export const ExportDialog = ({ open, onOpenChange }: ExportDialogProps) => {
+export const ExportDialog = ({ open, onOpenChange, items }: ExportDialogProps) => {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[425px]">

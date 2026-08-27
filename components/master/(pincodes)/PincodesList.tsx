@@ -14,6 +14,7 @@ import {
   Store,
   CheckSquare,
   Clock,
+  Link2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -51,6 +52,7 @@ interface PincodesListProps {
   onDeletePincode: (pincodeId: string) => void;
   onToggleStatus: (pincodeId: string) => void; // This will now toggle isServiceable
   onBulkDelete: () => void;
+  onMapSelectedLocation: () => void;
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number) => void;
@@ -66,6 +68,7 @@ const PincodesList = ({
   onDeletePincode,
   onToggleStatus,
   onBulkDelete,
+  onMapSelectedLocation,
   currentPage,
   totalPages,
   onPageChange,
@@ -118,6 +121,7 @@ const PincodesList = ({
               <TableHead className="w-[120px] font-semibold text-muted-foreground">Pincode</TableHead>
               <TableHead className="font-semibold text-muted-foreground">Location</TableHead>
               <TableHead className="w-[120px] font-semibold text-muted-foreground font-medium">Mapped Branch</TableHead>
+              <TableHead className="w-[180px] font-semibold text-muted-foreground">Operational Facility</TableHead>
               <TableHead className="w-[110px] font-semibold text-muted-foreground text-center">Branch Activity</TableHead>
               <TableHead className="w-[80px] font-semibold text-muted-foreground">Transit</TableHead>
               <TableHead className="w-[120px] font-semibold text-muted-foreground text-center">Global Service</TableHead>
@@ -155,6 +159,21 @@ const PincodesList = ({
                         <span>{pincode.branchId.name}</span>
                       </div>
                       <span className="text-[10px] text-muted-foreground">Code: {pincode.branchId.code}</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground italic">Not Mapped</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {pincode.locationId ? (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-blue-700 dark:text-blue-400">
+                        <Store className="h-3.5 w-3.5" />
+                        <span>{pincode.locationId.name}</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">
+                        {pincode.locationId.code}{pincode.locationId.address?.city ? ` · ${pincode.locationId.address.city}` : ""}
+                      </span>
                     </div>
                   ) : (
                     <span className="text-xs text-muted-foreground italic">Not Mapped</span>
@@ -266,6 +285,15 @@ const PincodesList = ({
             <span className="text-sm font-medium">Selected</span>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onMapSelectedLocation}
+              className="hover:bg-background/20 hover:text-white rounded-full h-8 text-xs gap-2"
+            >
+              <Link2 className="h-3.5 w-3.5" />
+              Map Facility
+            </Button>
             <Button variant="ghost" size="sm" className="hover:bg-background/20 hover:text-white rounded-full h-8 text-xs gap-2">
               <CheckSquare className="h-3.5 w-3.5" />
               Toggle Serviceability

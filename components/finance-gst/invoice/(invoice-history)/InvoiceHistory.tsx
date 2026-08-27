@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,36 +10,108 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { FileText, Download, Upload, BarChart3, Search, X, MoreHorizontal, Eye, Send, CheckCircle, Clock, IndianRupee, TrendingUp } from "lucide-react";
+import { FileText, Download, Upload, BarChart3, Search, X, MoreHorizontal, Eye, Send, CheckCircle, Clock, IndianRupee, TrendingUp, Loader2 } from "lucide-react";
 import { ImportDialog } from "../../../warehouse/(inventory)/ImportDialog";
 import { ExportDialog } from "../../../warehouse/(inventory)/ExportDialog";
 
-const historyStats = [
-    { title: "Total Invoices", value: "1,248", change: "+142", trend: "up", icon: FileText, description: "All time" },
-    { title: "Paid Invoices", value: "1,156", change: "+128", trend: "up", icon: CheckCircle, description: "Completed" },
-    { title: "Pending Payment", value: "68", change: "+12", trend: "down", icon: Clock, description: "Awaiting" },
-    { title: "Total Revenue", value: "₹185.5L", change: "+22%", trend: "up", icon: IndianRupee, description: "This year" },
-];
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 
-const invoiceHistory = [
-    { id: "INV-001", customer: "TechCorp Solutions", invoiceNo: "TC-INV-2024-001", amount: 125000, gstAmount: 22500, totalAmount: 147500, date: "2024-12-15", dueDate: "2024-12-30", status: "paid", paymentDate: "2024-12-20" },
-    { id: "INV-002", customer: "RetailHub India", invoiceNo: "RH-INV-2024-002", amount: 98000, gstAmount: 17640, totalAmount: 115640, date: "2024-12-18", dueDate: "2025-01-02", status: "pending", paymentDate: null },
-    { id: "INV-003", customer: "FoodMart Chain", invoiceNo: "FM-INV-2024-003", amount: 156000, gstAmount: 28080, totalAmount: 184080, date: "2024-12-10", dueDate: "2024-12-25", status: "paid", paymentDate: "2024-12-22" },
-    { id: "INV-004", customer: "Fashion Trends", invoiceNo: "FT-INV-2024-004", amount: 85000, gstAmount: 15300, totalAmount: 100300, date: "2024-12-20", dueDate: "2025-01-05", status: "sent", paymentDate: null },
-    { id: "INV-005", customer: "MediCare Pharma", invoiceNo: "MP-INV-2024-005", amount: 142000, gstAmount: 25560, totalAmount: 167560, date: "2024-12-12", dueDate: "2024-12-27", status: "overdue", paymentDate: null },
-];
+const STATUS_MAP: Record<string, string> = {
+    DRAFT: "draft",
+    ISSUED: "sent",
+    PARTIALLY_PAID: "partial",
+    PAID: "paid",
+    OVERDUE: "overdue",
+    CANCELLED: "cancelled",
+};
+
+const formatLakh = (amount: number) => {
+    if (!amount) return "₹0";
+    if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(2)}Cr`;
+    if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
+    return `₹${amount.toLocaleString("en-IN")}`;
+};
+
+const mapInvoice = (inv: any) => {
+    const customer = inv.customerId && typeof inv.customerId === "object" ? inv.customerId : {};
+    const lastPayment = inv.payments && inv.payments.length > 0 ? inv.payments[inv.payments.length - 1] : null;
+    return {
+        id: inv._id || inv.invoiceNo,
+        customer: inv.customerName || customer.name || "Unknown",
+        invoiceNo: inv.invoiceNo || "",
+        amount: inv.subtotal || 0,
+        gstAmount: inv.totalTax || 0,
+        totalAmount: inv.grandTotal || 0,
+        date: inv.invoiceDate ? new Date(inv.invoiceDate).toISOString().split("T")[0] : "",
+        dueDate: inv.dueDate ? new Date(inv.dueDate).toISOString().split("T")[0] : "",
+        status: STATUS_MAP[inv.status] || "draft",
+        paymentDate: lastPayment?.paidDate ? new Date(lastPayment.paidDate).toISOString().split("T")[0] : null,
+    };
+};
+
+const getStatusBadge = (status: string) => {
+    switch (status) {
+        case "paid": return <Badge variant="success" className="rounded-full">Paid</Badge>;
+        case "sent": return <Badge variant="warning" className="rounded-full">Issued</Badge>;
+        case "partial": return <Badge variant="warning" className="rounded-full">Partial</Badge>;
+        case "overdue": return <Badge variant="error" className="rounded-full">Overdue</Badge>;
+        case "cancelled": return <Badge variant="secondary" className="rounded-full">Cancelled</Badge>;
+        default: return <Badge variant="secondary" className="rounded-full">Draft</Badge>;
+    }
+};
 
 const InvoiceHistory = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all-status");
     const [isImportOpen, setIsImportOpen] = useState(false);
     const [isExportOpen, setIsExportOpen] = useState(false);
+    const [invoices, setInvoices] = useState<any[]>([]);
+    const [stats, setStats] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
 
-    const filteredData = invoiceHistory.filter((inv) => {
+    const fetchInvoices = useCallback(async () => {
+        try {
+            setLoading(true);
+            const token = localStorage.getItem("token");
+            const headers = { Authorization: `Bearer ${token}` };
+            const res = await axios.get(`${API_BASE}/api/invoices?limit=200`, { headers });
+            const raw = res.data?.data || res.data || [];
+            setInvoices(Array.isArray(raw) ? raw.map(mapInvoice) : []);
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || "Failed to fetch invoices");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    const fetchStats = useCallback(async () => {
+        try {
+            const token = localStorage.getItem("token");
+            const headers = { Authorization: `Bearer ${token}` };
+            const res = await axios.get(`${API_BASE}/api/invoices/stats`, { headers });
+            setStats(res.data);
+        } catch {
+            // silent
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchInvoices();
+        fetchStats();
+    }, [fetchInvoices, fetchStats]);
+
+    const filteredData = invoices.filter((inv) => {
         const matchesSearch = inv.customer.toLowerCase().includes(searchQuery.toLowerCase()) || inv.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesStatus = statusFilter === "all-status" || inv.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
+
+    const historyStats = [
+        { title: "Total Invoices", value: stats?.total?.toString() || "0", icon: FileText, description: "All time" },
+        { title: "Paid Invoices", value: stats?.paid?.toString() || "0", icon: CheckCircle, description: "Completed" },
+        { title: "Pending Payment", value: ((stats?.issued || 0) + (stats?.partiallyPaid || 0) + (stats?.overdue || 0)).toString(), icon: Clock, description: "Awaiting" },
+        { title: "Total Revenue", value: formatLakh(stats?.totalCollected || 0), icon: IndianRupee, description: "Collected" },
+    ];
 
     return (
         <div className="space-y-7">
@@ -51,10 +125,10 @@ const InvoiceHistory = () => {
                         </div>
                         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                             <span className="flex items-center gap-2 rounded-full bg-muted/50 px-3 py-1">
-                                <FileText className="h-3.5 w-3.5 text-primary" />1,248 invoices
+                                <FileText className="h-3.5 w-3.5 text-primary" />{stats?.total || 0} invoices
                             </span>
                             <span className="flex items-center gap-2 rounded-full bg-muted/40 px-3 py-1">
-                                <BarChart3 className="h-3.5 w-3.5 text-success" />92.6% paid
+                                <BarChart3 className="h-3.5 w-3.5 text-success" />{formatLakh(stats?.totalCollected || 0)} collected
                             </span>
                         </div>
                     </div>
@@ -85,9 +159,6 @@ const InvoiceHistory = () => {
                                 </div>
                             </div>
                             <div className="mt-4 flex items-center gap-2">
-                                <span className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${stat.trend === "up" ? "bg-success/15 text-success" : "bg-error/15 text-error"}`}>
-                                    {stat.change}
-                                </span>
                                 <span className="text-xs text-muted-foreground">{stat.description}</span>
                             </div>
                         </CardContent>
@@ -109,9 +180,11 @@ const InvoiceHistory = () => {
                             <SelectContent>
                                 <SelectItem value="all-status">All Status</SelectItem>
                                 <SelectItem value="paid">Paid</SelectItem>
-                                <SelectItem value="pending">Pending</SelectItem>
-                                <SelectItem value="sent">Sent</SelectItem>
+                                <SelectItem value="partial">Partially Paid</SelectItem>
+                                <SelectItem value="sent">Issued</SelectItem>
                                 <SelectItem value="overdue">Overdue</SelectItem>
+                                <SelectItem value="draft">Draft</SelectItem>
+                                <SelectItem value="cancelled">Cancelled</SelectItem>
                             </SelectContent>
                         </Select>
                         {(searchQuery || statusFilter !== "all-status") && (
@@ -145,7 +218,9 @@ const InvoiceHistory = () => {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredData.length === 0 ? (
+                                {loading ? (
+                                    <TableRow><TableCell colSpan={9} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                                ) : filteredData.length === 0 ? (
                                     <TableRow><TableCell colSpan={9} className="h-24 text-center">No invoices found.</TableCell></TableRow>
                                 ) : (
                                     filteredData.map((inv) => (
@@ -155,13 +230,9 @@ const InvoiceHistory = () => {
                                             <TableCell><span className="font-medium">₹{inv.amount.toLocaleString("en-IN")}</span></TableCell>
                                             <TableCell><span className="text-sm">₹{inv.gstAmount.toLocaleString("en-IN")}</span></TableCell>
                                             <TableCell><span className="font-semibold text-foreground">₹{inv.totalAmount.toLocaleString("en-IN")}</span></TableCell>
-                                            <TableCell><span className="text-sm">{new Date(inv.date).toLocaleDateString("en-IN")}</span></TableCell>
-                                            <TableCell><span className="text-sm">{new Date(inv.dueDate).toLocaleDateString("en-IN")}</span></TableCell>
-                                            <TableCell>
-                                                <Badge variant={inv.status === "paid" ? "success" : inv.status === "overdue" ? "error" : inv.status === "sent" ? "warning" : "secondary"} className="rounded-full">
-                                                    {inv.status === "paid" ? "Paid" : inv.status === "overdue" ? "Overdue" : inv.status === "sent" ? "Sent" : "Pending"}
-                                                </Badge>
-                                            </TableCell>
+                                            <TableCell><span className="text-sm">{inv.date ? new Date(inv.date).toLocaleDateString("en-IN") : "—"}</span></TableCell>
+                                            <TableCell><span className="text-sm">{inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("en-IN") : "—"}</span></TableCell>
+                                            <TableCell>{getStatusBadge(inv.status)}</TableCell>
                                             <TableCell>
                                                 <div className="flex justify-end">
                                                     <DropdownMenu>
@@ -169,7 +240,7 @@ const InvoiceHistory = () => {
                                                         <DropdownMenuContent align="end" className="rounded-xl">
                                                             <DropdownMenuItem className="flex items-center gap-2 rounded-lg"><Eye className="h-4 w-4" />View Invoice</DropdownMenuItem>
                                                             <DropdownMenuItem className="flex items-center gap-2 rounded-lg"><Download className="h-4 w-4" />Download PDF</DropdownMenuItem>
-                                                            {inv.status !== "paid" && <DropdownMenuItem className="flex items-center gap-2 rounded-lg"><Send className="h-4 w-4" />Send Reminder</DropdownMenuItem>}
+                                                            {inv.status !== "paid" && inv.status !== "cancelled" && <DropdownMenuItem className="flex items-center gap-2 rounded-lg"><Send className="h-4 w-4" />Send Reminder</DropdownMenuItem>}
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </div>

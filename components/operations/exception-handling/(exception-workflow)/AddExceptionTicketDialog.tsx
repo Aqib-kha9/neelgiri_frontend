@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import axios from "axios";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,12 +11,35 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+
+// Map frontend type labels to backend enum values
+const TYPE_LABEL_TO_BACKEND: Record<string, string> = {
+    "Package Damaged": "DAMAGED",
+    "Wrong Address": "ADDRESS_ISSUE",
+    "Late Delivery": "DELAY",
+    "Customer Refused": "REFUSED",
+    "Missing Item": "PILFERAGE",
+    "Vehicle Breakdown": "OTHER",
+    "Weather Delay": "DELAY",
+    "Other": "OTHER",
+};
+
+// Map frontend severity to backend enum
+const SEVERITY_TO_BACKEND: Record<string, string> = {
+    critical: "CRITICAL",
+    high: "HIGH",
+    medium: "MEDIUM",
+    low: "LOW",
+};
+
 interface AddExceptionTicketDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onTicketCreated?: () => void;
 }
 
-export const AddExceptionTicketDialog = ({ open, onOpenChange }: AddExceptionTicketDialogProps) => {
+export const AddExceptionTicketDialog = ({ open, onOpenChange, onTicketCreated }: AddExceptionTicketDialogProps) => {
     const [formData, setFormData] = useState({
         orderId: "",
         type: "",
@@ -23,11 +49,9 @@ export const AddExceptionTicketDialog = ({ open, onOpenChange }: AddExceptionTic
         customerPhone: "",
         riderName: "",
     });
+    const [submitting, setSubmitting] = useState(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        console.log("Exception Ticket Data:", formData);
-        onOpenChange(false);
+    const resetForm = () => {
         setFormData({
             orderId: "",
             type: "",
@@ -37,6 +61,48 @@ export const AddExceptionTicketDialog = ({ open, onOpenChange }: AddExceptionTic
             customerPhone: "",
             riderName: "",
         });
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (submitting) return;
+
+        setSubmitting(true);
+        try {
+            const token = localStorage.getItem("token");
+            const headers = { Authorization: `Bearer ${token}` };
+
+            const backendType = TYPE_LABEL_TO_BACKEND[formData.type] || "OTHER";
+            const backendSeverity = SEVERITY_TO_BACKEND[formData.severity] || "MEDIUM";
+
+            const payload: any = {
+                type: backendType,
+                severity: backendSeverity,
+                title: formData.type || "Exception Report",
+                description: formData.description,
+                awb: formData.orderId || undefined,
+                reportedBy: formData.customerName || undefined,
+            };
+
+            // Add rider info to description if provided
+            if (formData.riderName) {
+                payload.description = `${formData.description}\n\nRider: ${formData.riderName}`;
+            }
+            if (formData.customerPhone) {
+                payload.description = `${payload.description}\nCustomer Phone: ${formData.customerPhone}`;
+            }
+
+            await axios.post(`${API_BASE}/api/exceptions`, payload, { headers });
+            toast.success("Exception ticket created successfully");
+            onOpenChange(false);
+            resetForm();
+            if (onTicketCreated) onTicketCreated();
+        } catch (error: any) {
+            const msg = error?.response?.data?.message || "Failed to create exception ticket";
+            toast.error(msg);
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -141,10 +207,19 @@ export const AddExceptionTicketDialog = ({ open, onOpenChange }: AddExceptionTic
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
                             Cancel
                         </Button>
-                        <Button type="submit">Create Ticket</Button>
+                        <Button type="submit" disabled={submitting}>
+                            {submitting ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Creating...
+                                </>
+                            ) : (
+                                "Create Ticket"
+                            )}
+                        </Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

@@ -1,31 +1,56 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import DriversHeader from "./DriversHeader";
 import DriversStats from "./DriversStats";
 import DriversFilters from "./DriversFilters";
 import DriversList from "./DriversList";
 import DriverForm from "./DriverForm";
 import { Driver, DriverFormData } from "./types";
-import { mockDrivers } from "./mockData";
 
 const DriversManagement = () => {
-    const [drivers, setDrivers] = useState<Driver[]>(mockDrivers);
+    const [drivers, setDrivers] = useState<Driver[]>([]);
+    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState("ALL");
 
     // Form State
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingDriver, setEditingDriver] = useState<Driver | null>(null);
+    const [submitting, setSubmitting] = useState(false);
 
-    const filteredDrivers = drivers.filter((d) => {
-        const matchesSearch = d.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            d.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            d.phone.includes(searchTerm);
-        const matchesStatus = statusFilter === "ALL" || d.status === statusFilter;
+    const fetchDrivers = useCallback(async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem("token");
+            const params: Record<string, string> = {};
+            if (searchTerm) params.search = searchTerm;
+            if (statusFilter !== "ALL") params.status = statusFilter;
 
-        return matchesSearch && matchesStatus;
-    });
+            const { data } = await axios.get("/api/drivers", {
+                params,
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            // Map MongoDB _id to id for frontend compatibility
+            const mapped = (Array.isArray(data) ? data : data.data || []).map((d: any) => ({
+                ...d,
+                id: d._id || d.id,
+            }));
+            setDrivers(mapped);
+        } catch (error) {
+            console.error("Failed to load drivers", error);
+            toast.error("Failed to load drivers");
+        } finally {
+            setLoading(false);
+        }
+    }, [searchTerm, statusFilter]);
+
+    useEffect(() => {
+        fetchDrivers();
+    }, [fetchDrivers]);
 
     const handleAddDriver = () => {
         setEditingDriver(null);
@@ -37,26 +62,46 @@ const DriversManagement = () => {
         setIsFormOpen(true);
     };
 
-    const handleDeleteDriver = (id: string) => {
-        if (confirm("Are you sure you want to delete this driver?")) {
-            setDrivers(prev => prev.filter(d => d.id !== id));
+    const handleDeleteDriver = async (id: string) => {
+        if (!confirm("Are you sure you want to delete this driver?")) return;
+        try {
+            const token = localStorage.getItem("token");
+            await axios.delete(`/api/drivers/${id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            toast.success("Driver deleted successfully");
+            fetchDrivers();
+        } catch (error) {
+            console.error("Delete failed", error);
+            toast.error("Failed to delete driver");
         }
     };
 
-    const handleFormSubmit = (data: DriverFormData) => {
-        if (editingDriver) {
-            // Update existing
-            setDrivers(prev => prev.map(d => d.id === editingDriver.id ? { ...d, ...data } : d));
-        } else {
-            // Add new
-            const newDriver: Driver = {
-                id: `D${Date.now()}`,
-                code: `DRV-${Math.floor(Math.random() * 1000)}`, // Simple code generation
-                ...data
-            } as Driver;
-            setDrivers(prev => [newDriver, ...prev]);
+    const handleFormSubmit = async (formData: DriverFormData) => {
+        setSubmitting(true);
+        try {
+            const token = localStorage.getItem("token");
+            const payload = { ...formData };
+
+            if (editingDriver) {
+                await axios.put(`/api/drivers/${editingDriver.id}`, payload, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                toast.success("Driver updated successfully");
+            } else {
+                await axios.post("/api/drivers", payload, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                toast.success("Driver created successfully");
+            }
+            setIsFormOpen(false);
+            fetchDrivers();
+        } catch (error: any) {
+            console.error("Form submit failed", error);
+            toast.error(error?.response?.data?.message || "Failed to save driver");
+        } finally {
+            setSubmitting(false);
         }
-        setIsFormOpen(false);
     };
 
     return (
@@ -75,11 +120,17 @@ const DriversManagement = () => {
                 onStatusChange={setStatusFilter}
             />
 
-            <DriversList
-                drivers={filteredDrivers}
-                onEdit={handleEditDriver}
-                onDelete={handleDeleteDriver}
-            />
+            {loading ? (
+                <div className="flex items-center justify-center py-16">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+            ) : (
+                <DriversList
+                    drivers={drivers}
+                    onEdit={handleEditDriver}
+                    onDelete={handleDeleteDriver}
+                />
+            )}
 
             <DriverForm
                 open={isFormOpen}

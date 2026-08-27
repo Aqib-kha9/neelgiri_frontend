@@ -21,12 +21,14 @@ import { Textarea } from "@/components/ui/textarea";
 interface AddItemDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onSaved?: () => void;
 }
 
-export const AddItemDialog = ({ open, onOpenChange }: AddItemDialogProps) => {
+export const AddItemDialog = ({ open, onOpenChange, onSaved }: AddItemDialogProps) => {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         // Handle form submission
+        onSaved?.();
         onOpenChange(false);
     };
 

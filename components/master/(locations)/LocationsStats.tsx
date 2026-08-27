@@ -14,9 +14,9 @@ interface LocationsStatsProps {
 
 const LocationsStats = ({ locations }: LocationsStatsProps) => {
   const activeLocations = locations.filter((l) => l.status === "active").length;
-  const hubs = locations.filter((l) => l.type === "hub").length;
-  const warehouses = locations.filter((l) => l.type === "warehouse").length;
-  const counters = locations.filter((l) => l.type === "counter").length;
+  const hubs = locations.filter((l) => ["hub", "transit_hub"].includes(l.type)).length;
+  const warehouses = locations.filter((l) => ["warehouse", "cross_dock"].includes(l.type)).length;
+  const counters = locations.filter((l) => ["branch", "pickup_point", "delivery_center"].includes(l.type)).length;
   const operationalLocations = locations.filter((l) => l.isOperational).length;
 
   return (

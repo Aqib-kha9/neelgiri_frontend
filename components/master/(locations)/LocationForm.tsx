@@ -1,5 +1,6 @@
 // components/master/locations/LocationForm.tsx
 import { useState, useEffect } from "react";
+import axios from "axios";
 import {
   X,
   MapPin,
@@ -27,7 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Location, LocationFormData } from "./types";
+import { FacilityCapability, Location, LocationFormData } from "./types";
 
 interface LocationFormProps {
   location: Location | null;
@@ -40,6 +41,7 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
     name: "",
     code: "",
     type: "hub",
+    category: "PRIMARY",
     address: "",
     city: "",
     state: "",
@@ -47,11 +49,7 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
     contactPerson: "",
     phone: "",
     email: "",
-    capacity: {
-      shipments: 0,
-      storage: 0,
-      vehicles: 0,
-    },
+    capacity: { shipments: 0, storage: 0, maxWeightKg: 0, vehicleBays: 0 },
     facilities: [],
     operatingHours: {
       open: "09:00",
@@ -61,21 +59,52 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
     services: [],
     status: "active",
     manager: "",
-    coordinates: {
-      lat: 0,
-      lng: 0,
-    },
-    isOperational: true,
+    coordinates: { lat: null, lng: null },
     securityLevel: "medium",
-    lastAudit: new Date().toISOString().split("T")[0],
-    nextAudit: new Date().toISOString().split("T")[0],
+    lastAudit: "",
+    nextAudit: "",
     ownershipType: "COCO",
     parentHubId: "",
     gstin: "",
+    serviceability: { autoMapAddressPincode: true, defaultTransitDays: 3 },
   });
 
-  const [newFacility, setNewFacility] = useState("");
+  const [parentLocations, setParentLocations] = useState<Location[]>([]);
   const [newService, setNewService] = useState("");
+  const facilityOptions: FacilityCapability[] = [
+    "Loading Dock",
+    "CCTV",
+    "Fire Safety",
+    "Cold Storage",
+    "Weighbridge",
+    "Backup Power",
+    "Security Staff",
+    "24x7 Operations",
+  ];
+  const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+
+  useEffect(() => {
+    const loadParentLocations = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get(`${API_BASE}/api/locations`, {
+          params: { status: "ACTIVE" },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const list = Array.isArray(response.data) ? response.data : [];
+        setParentLocations(list.map((item: any) => ({
+          id: item._id || item.id,
+          code: item.code || "",
+          name: item.name || "Unnamed location",
+          city: item.address?.city || "",
+        })) as Location[]);
+      } catch {
+        setParentLocations([]);
+      }
+    };
+
+    loadParentLocations();
+  }, [API_BASE]);
 
   useEffect(() => {
     if (location) {
@@ -90,6 +119,7 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
         contactPerson: location.contactPerson,
         phone: location.phone,
         email: location.email,
+        category: location.category || "PRIMARY",
         capacity: location.capacity,
         facilities: location.facilities,
         operatingHours: location.operatingHours,
@@ -97,24 +127,54 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
         status: location.status,
         manager: location.manager,
         coordinates: location.coordinates,
-        isOperational: location.isOperational,
         securityLevel: location.securityLevel,
         lastAudit: location.lastAudit,
         nextAudit: location.nextAudit,
         ownershipType: location.ownershipType || "COCO",
         parentHubId: location.parentHubId || "",
         gstin: location.gstin || "",
+        serviceability: location.serviceability || { autoMapAddressPincode: false, defaultTransitDays: 3 },
       });
     }
   }, [location]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+
+    const missingFields = [
+      !formData.name.trim() && "location name",
+      !formData.code.trim() && "location code",
+      !formData.manager.trim() && "manager",
+      !formData.contactPerson.trim() && "contact person",
+      !formData.phone.trim() && "phone number",
+      !formData.email.trim() && "email",
+      !formData.address.trim() && "address",
+      !formData.city.trim() && "city",
+      !formData.state.trim() && "state",
+      !/^\d{6}$/.test(formData.pincode.trim()) && "valid 6-digit pincode",
+    ].filter(Boolean) as string[];
+
+    if (missingFields.length > 0) {
+      window.alert(`Please complete: ${missingFields.join(", ")}.`);
+      return;
+    }
+
+    onSave({
+      ...formData,
+      code: formData.code.trim().toUpperCase(),
+      pincode: formData.pincode.trim(),
+    });
   };
 
   const handleInputChange = (field: keyof LocationFormData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleServiceabilityChange = (field: "autoMapAddressPincode" | "defaultTransitDays", value: boolean | number) => {
+    setFormData((prev) => ({
+      ...prev,
+      serviceability: { ...prev.serviceability, [field]: value },
+    }));
   };
 
   const handleCapacityChange = (
@@ -143,21 +203,20 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
   ) => {
     setFormData((prev) => ({
       ...prev,
-      coordinates: { ...prev.coordinates, [field]: parseFloat(value) || 0 },
+      coordinates: {
+        ...prev.coordinates,
+        [field]: value.trim() === "" ? null : parseFloat(value),
+      },
     }));
   };
 
-  const addFacility = () => {
-    if (
-      newFacility.trim() &&
-      !formData.facilities.includes(newFacility.trim())
-    ) {
-      setFormData((prev) => ({
-        ...prev,
-        facilities: [...prev.facilities, newFacility.trim()],
-      }));
-      setNewFacility("");
-    }
+  const toggleFacility = (facility: FacilityCapability) => {
+    setFormData((prev) => ({
+      ...prev,
+      facilities: prev.facilities.includes(facility)
+        ? prev.facilities.filter((item) => item !== facility)
+        : [...prev.facilities, facility],
+    }));
   };
 
   const removeFacility = (facility: string) => {
@@ -270,6 +329,11 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
                           Hub
                         </div>
                       </SelectItem>
+                      <SelectItem value="branch">Branch / Service Centre</SelectItem>
+                      <SelectItem value="transit_hub">Transit Hub</SelectItem>
+                      <SelectItem value="cross_dock">Cross-Dock</SelectItem>
+                      <SelectItem value="delivery_center">Delivery Centre</SelectItem>
+                      <SelectItem value="pickup_point">Pickup Point</SelectItem>
                       <SelectItem value="warehouse">
                         <div className="flex items-center gap-2">
                           <Warehouse className="h-4 w-4" />
@@ -318,16 +382,23 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="parentHubId">Parent Hub ID (Optional)</Label>
-                    <Input
-                      id="parentHubId"
-                      value={formData.parentHubId || ""}
-                      onChange={(e) =>
-                        handleInputChange("parentHubId", e.target.value)
+                    <Label htmlFor="parentHubId">Parent Hub (Optional)</Label>
+                    <Select
+                      value={formData.parentHubId || "none"}
+                      onValueChange={(value) =>
+                        handleInputChange("parentHubId", value === "none" ? "" : value)
                       }
-                      className="rounded-lg"
-                      placeholder="e.g. HUB-001"
-                    />
+                    >
+                      <SelectTrigger className="rounded-lg"><SelectValue placeholder="Select a parent facility" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No parent facility</SelectItem>
+                        {parentLocations.filter((item) => item.id !== location?.id).map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.code} — {item.name}{item.city ? ` (${item.city})` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -503,7 +574,7 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
                     id="lat"
                     type="number"
                     step="any"
-                    value={formData.coordinates.lat}
+                    value={formData.coordinates.lat ?? ""}
                     onChange={(e) =>
                       handleCoordinateChange("lat", e.target.value)
                     }
@@ -517,7 +588,7 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
                     id="lng"
                     type="number"
                     step="any"
-                    value={formData.coordinates.lng}
+                    value={formData.coordinates.lng ?? ""}
                     onChange={(e) =>
                       handleCoordinateChange("lng", e.target.value)
                     }
@@ -568,17 +639,25 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="vehicles">Vehicle Capacity</Label>
+                  <Label htmlFor="maxWeightKg">Max Weight Throughput (kg)</Label>
                   <Input
-                    id="vehicles"
+                    id="maxWeightKg"
                     type="number"
-                    value={formData.capacity.vehicles}
-                    onChange={(e) =>
-                      handleCapacityChange(
-                        "vehicles",
-                        parseInt(e.target.value) || 0
-                      )
-                    }
+                    min="0"
+                    value={formData.capacity.maxWeightKg}
+                    onChange={(e) => handleCapacityChange("maxWeightKg", parseInt(e.target.value) || 0)}
+                    className="rounded-lg"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="vehicleBays">Vehicle / Docking Bays</Label>
+                  <Input
+                    id="vehicleBays"
+                    type="number"
+                    min="0"
+                    value={formData.capacity.vehicleBays}
+                    onChange={(e) => handleCapacityChange("vehicleBays", parseInt(e.target.value) || 0)}
                     className="rounded-lg"
                   />
                 </div>
@@ -661,45 +740,12 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
             {/* Facilities & Services */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-foreground border-b pb-2">
-                  Facilities
-                </h3>
-
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Add facility..."
-                    value={newFacility}
-                    onChange={(e) => setNewFacility(e.target.value)}
-                    className="rounded-lg"
-                    onKeyPress={(e) =>
-                      e.key === "Enter" && (e.preventDefault(), addFacility())
-                    }
-                  />
-                  <Button
-                    type="button"
-                    onClick={addFacility}
-                    className="rounded-lg"
-                  >
-                    Add
-                  </Button>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  {formData.facilities.map((facility, index) => (
-                    <Badge
-                      key={index}
-                      variant="secondary"
-                      className="rounded-full flex items-center gap-1"
-                    >
-                      {facility}
-                      <button
-                        type="button"
-                        onClick={() => removeFacility(facility)}
-                        className="hover:text-red-600"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
+                <h3 className="text-sm font-semibold text-foreground border-b pb-2">Facility Capabilities</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {facilityOptions.map((facility) => (
+                    <Button key={facility} type="button" variant={formData.facilities.includes(facility) ? "default" : "outline"} className="justify-start rounded-lg text-xs" onClick={() => toggleFacility(facility)}>
+                      {formData.facilities.includes(facility) ? "✓ " : ""}{facility}
+                    </Button>
                   ))}
                 </div>
               </div>
@@ -749,6 +795,37 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
               </div>
             </div>
 
+            {/* Geographic Coverage */}
+            <div className="space-y-4 rounded-xl border border-blue-200 bg-blue-50/50 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+              <h3 className="text-sm font-semibold text-foreground border-b pb-2">Geographic Coverage</h3>
+              <p className="text-xs text-muted-foreground">
+                Map this facility's address pincode to the operational serviceability master so it can be used for route planning.
+              </p>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <Label htmlFor="autoMapAddressPincode">Auto-map address pincode</Label>
+                  <p className="text-xs text-muted-foreground">Enable serviceability for matching pincode records when this location is active.</p>
+                </div>
+                <Switch
+                  id="autoMapAddressPincode"
+                  checked={formData.serviceability.autoMapAddressPincode}
+                  onCheckedChange={(checked) => handleServiceabilityChange("autoMapAddressPincode", checked)}
+                />
+              </div>
+              <div className="space-y-2 max-w-xs">
+                <Label htmlFor="defaultTransitDays">Default Transit Days</Label>
+                <Input
+                  id="defaultTransitDays"
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={formData.serviceability.defaultTransitDays}
+                  onChange={(e) => handleServiceabilityChange("defaultTransitDays", parseInt(e.target.value, 10) || 3)}
+                  className="rounded-lg"
+                />
+              </div>
+            </div>
+
             {/* Additional Settings */}
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-foreground border-b pb-2">
@@ -757,18 +834,9 @@ const LocationForm = ({ location, onSave, onCancel }: LocationFormProps) => {
 
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="isOperational" className="text-sm">
-                      Operational Status
-                    </Label>
-                    <Switch
-                      id="isOperational"
-                      checked={formData.isOperational}
-                      onCheckedChange={(checked) =>
-                        handleInputChange("isOperational", checked)
-                      }
-                    />
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Operational availability is controlled by the Status field above. Active locations are available for route planning.
+                  </p>
 
                   <div className="space-y-2">
                     <Label htmlFor="lastAudit">Last Audit Date</Label>

@@ -51,7 +51,6 @@ export const PERMISSION_NAV_MAP: Record<string, { href: string; icon?: string }>
 
   // AWB
   'awb_series': { href: '/dashboard/awb/series' },
-  'awb_allocation': { href: '/dashboard/awb/allocation' },
   'awb_usage': { href: '/dashboard/awb/usage' },
 
   // Tracking & POD
@@ -79,7 +78,6 @@ export const PERMISSION_NAV_MAP: Record<string, { href: string; icon?: string }>
   // Branch Management
   'branch_all': { href: '/dashboard/branches' },
   'branch_add': { href: '/dashboard/branches/add' },
-  'branch_perf': { href: '/dashboard/branches/performance' },
   'branch_service': { href: '/dashboard/branches/service-areas' },
 
   // Warehouse Operations
@@ -125,6 +123,10 @@ export const PERMISSION_NAV_MAP: Record<string, { href: string; icon?: string }>
   'op_ex_flow': { href: '/dashboard/exceptions/workflow' },
   'op_ex_rca': { href: '/dashboard/exceptions/analysis' },
   'op_ex_qc': { href: '/dashboard/exceptions/quality' },
+  'op_trips': { href: '/dashboard/operations/trips' },
+  'op_hub': { href: '/dashboard/operations/hub' },
+  'op_rto': { href: '/dashboard/operations/rto' },
+  'op_sla': { href: '/dashboard/operations/sla' },
 
   // Reports
   'rep_del_perf': { href: '/dashboard/reports/delivery' },
@@ -383,6 +385,16 @@ function getSuperAdminNavigation(): NavigationItem[] {
       ],
     },
     {
+      title: "Operations",
+      icon: "Settings",
+      children: [
+        { title: "Trip Management", href: "/dashboard/operations/trips" },
+        { title: "Hub Operations", href: "/dashboard/operations/hub" },
+        { title: "RTO Management", href: "/dashboard/operations/rto" },
+        { title: "SLA Monitoring", href: "/dashboard/operations/sla" },
+      ],
+    },
+    {
       title: "System Admin",
       icon: "Shield",
       children: [
@@ -428,6 +440,16 @@ function getPartnerAdminNavigation(): NavigationItem[] {
             { title: "Manifest History", href: "/dashboard/manifest/forwarding/history" },
           ],
         },
+      ],
+    },
+    {
+      title: "Operations",
+      icon: "Settings",
+      children: [
+        { title: "Trip Management", href: "/dashboard/operations/trips" },
+        { title: "Hub Operations", href: "/dashboard/operations/hub" },
+        { title: "RTO Management", href: "/dashboard/operations/rto" },
+        { title: "SLA Monitoring", href: "/dashboard/operations/sla" },
       ],
     },
     {
@@ -483,6 +505,16 @@ function getBranchAdminNavigation(): NavigationItem[] {
       ],
     },
     {
+      title: "Operations",
+      icon: "Settings",
+      children: [
+        { title: "Trip Management", href: "/dashboard/operations/trips" },
+        { title: "Hub Operations", href: "/dashboard/operations/hub" },
+        { title: "RTO Management", href: "/dashboard/operations/rto" },
+        { title: "SLA Monitoring", href: "/dashboard/operations/sla" },
+      ],
+    },
+    {
       title: "Master Data",
       icon: "Database",
       children: [
@@ -527,6 +559,16 @@ function getDispatcherNavigation(): NavigationItem[] {
       ],
     },
     {
+      title: "Operations",
+      icon: "Settings",
+      children: [
+        { title: "Trip Management", href: "/dashboard/operations/trips" },
+        { title: "Hub Operations", href: "/dashboard/operations/hub" },
+        { title: "RTO Management", href: "/dashboard/operations/rto" },
+        { title: "SLA Monitoring", href: "/dashboard/operations/sla" },
+      ],
+    },
+    {
       title: "System Admin",
       icon: "Shield",
       children: [
@@ -539,7 +581,8 @@ function getDispatcherNavigation(): NavigationItem[] {
 function getRiderNavigation(): NavigationItem[] {
   return [
     { title: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
-    { title: "See Task", href: "/dashboard/rider/tasks", icon: "ClipboardList" },
+    { title: "Delivery Tasks", href: "/dashboard/rider/tasks", icon: "ClipboardList" },
+    { title: "Pickup Collections", href: "/dashboard/orders/pending-pickups", icon: "Package" },
     { title: "POD Capture", href: "/dashboard/rider/pod", icon: "Camera" },
   ];
 }
@@ -547,6 +590,7 @@ function getCustomerNavigation(): NavigationItem[] {
   return [
     { title: "Dashboard", href: "/dashboard", icon: "LayoutDashboard" },
     { title: "Create Order", href: "/dashboard/customer/booking", icon: "Package" },
+    { title: "Pickup Requests", href: "/dashboard/customers/pickup-requests", icon: "Truck" },
     {
       title: "Master Data",
       icon: "Database",
@@ -564,8 +608,8 @@ export function getFirstAccessibleRoute(user: { role: string; permissions: Permi
   if (user.role === 'super_admin' || user.role === 'admin') return '/dashboard';
 
   // 2. Iterate through modules in order to find the first accessible resource
-  for (const module of PERMISSION_MODULES) {
-    for (const resource of module.resources) {
+  for (const permissionModule of PERMISSION_MODULES) {
+    for (const resource of permissionModule.resources) {
       if (!PERMISSION_NAV_MAP[resource.key]) continue;
 
       const hasRead = user.permissions.some(

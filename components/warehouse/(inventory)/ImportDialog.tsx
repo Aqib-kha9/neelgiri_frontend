@@ -14,9 +14,10 @@ import { Upload, FileText } from "lucide-react";
 interface ImportDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onImported?: () => void;
 }
 
-export const ImportDialog = ({ open, onOpenChange }: ImportDialogProps) => {
+export const ImportDialog = ({ open, onOpenChange, onImported }: ImportDialogProps) => {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[425px]">

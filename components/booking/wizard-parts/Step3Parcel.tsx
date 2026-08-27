@@ -26,18 +26,33 @@ export function Step3Parcel({ formData, handleInputChange, pricing, session, upl
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
+        e.target.value = "";
         if (files.length === 0) return;
 
+        const existingPhotoCount = (formData.attachments || []).filter((attachment: any) => attachment.type === "parcel_photo").length;
+        if (existingPhotoCount + files.length > 5) {
+            window.alert("A maximum of 5 parcel photos is allowed.");
+            return;
+        }
+
+        const invalidFile = files.find((file) => !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024);
+        if (invalidFile) {
+            window.alert("Parcel photos must be JPG, PNG, or WEBP files no larger than 5 MB each.");
+            return;
+        }
+
         const uploadedFiles = await uploadFiles(files);
-        
-        const newAttachments = uploadedFiles.map((file, index) => ({
+        const newAttachments = uploadedFiles.map((file) => ({
             id: Math.random().toString(36).substr(2, 9),
             url: file.url,
+            originalname: file.originalname,
             name: file.originalname,
-            type: 'parcel_photo',
-            preview: file.url // Use server URL for preview
+            mimetype: file.mimetype,
+            size: Number(file.size),
+            type: "parcel_photo",
+            preview: file.url
         }));
-        
+
         handleInputChange("attachments", [...(formData.attachments || []), ...newAttachments]);
     };
 
@@ -62,6 +77,9 @@ export function Step3Parcel({ formData, handleInputChange, pricing, session, upl
                                     <Input
                                         placeholder="0.00"
                                         type="number"
+                                        min="0.01"
+                                        max="10000"
+                                        step="0.01"
                                         className="pl-9"
                                         value={formData.weight}
                                         onChange={(e) => handleInputChange("weight", e.target.value)}
@@ -91,6 +109,8 @@ export function Step3Parcel({ formData, handleInputChange, pricing, session, upl
                                         <Input
                                             placeholder={dim.charAt(0).toUpperCase() + dim.slice(1)}
                                             type="number"
+                                            min="0.01"
+                                            step="0.01"
                                             className="text-center"
                                             value={(formData as any)[dim]}
                                             onChange={(e) => handleInputChange(dim, e.target.value)}
@@ -107,18 +127,31 @@ export function Step3Parcel({ formData, handleInputChange, pricing, session, upl
                                 <Input
                                     placeholder="Invoice value"
                                     type="number"
+                                    min="0"
+                                    step="0.01"
                                     value={formData.declaredValue}
                                     onChange={(e) => handleInputChange("declaredValue", e.target.value)}
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label className="text-sm">Contents <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+                                <Label className="text-sm">Contents *</Label>
                                 <Input
                                     placeholder="e.g. Electronics, Clothes"
                                     value={formData.contents}
                                     onChange={(e) => handleInputChange("contents", e.target.value)}
                                 />
                             </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label className="text-sm">Category *</Label>
+                                <Input value={formData.category} onChange={(e) => handleInputChange("category", e.target.value)} placeholder="General" maxLength={80} />
+                            </div>
+                            <label className="flex items-center gap-3 rounded-md border p-3 cursor-pointer">
+                                <input type="checkbox" checked={formData.isFragile === true} onChange={(e) => handleInputChange("isFragile", e.target.checked)} />
+                                <span className="text-sm font-medium">Fragile parcel</span>
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -153,16 +186,28 @@ export function Step3Parcel({ formData, handleInputChange, pricing, session, upl
 
                         <div className="flex items-center justify-between p-4 rounded-lg bg-background border">
                             <div className="flex items-center gap-3">
-                                <div className={`h-10 w-10 rounded-md flex items-center justify-center ${formData.isInsured ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                                <div className={`h-10 w-10 rounded-md flex items-center justify-center ${formData.insuranceRequired ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
                                     <ShieldCheck className="h-5 w-5" />
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium text-foreground">Transit Insurance</p>
-                                    <p className="text-xs text-muted-foreground">Risk Protection</p>
+                                    <p className="text-xs text-muted-foreground">Add declared-value protection</p>
                                 </div>
                             </div>
-                            <Badge variant="outline">Automatic</Badge>
+                            <label className="flex items-center gap-2 text-sm font-medium">
+                                <input type="checkbox" checked={formData.insuranceRequired === true} onChange={(e) => {
+                                    handleInputChange("insuranceRequired", e.target.checked);
+                                    if (!e.target.checked) handleInputChange("fovPercentage", "");
+                                }} />
+                                Protect shipment
+                            </label>
                         </div>
+                        {formData.insuranceRequired && (
+                            <div className="space-y-2">
+                                <Label className="text-sm">FOV Rate (%)</Label>
+                                <Input type="number" min="0.01" max="100" step="0.01" value={formData.fovPercentage || ""} onChange={(e) => handleInputChange("fovPercentage", e.target.value)} />
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -171,7 +216,7 @@ export function Step3Parcel({ formData, handleInputChange, pricing, session, upl
             <div className="pt-4 border-t">
                 <h3 className="text-sm font-semibold text-foreground mb-4">Shipment Photos & Attachments</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div 
+                    <div
                         className="border-2 border-dashed border-muted-foreground/20 rounded-xl p-6 flex flex-col items-center justify-center hover:border-primary/50 transition-all cursor-pointer bg-muted/5 group h-full min-h-[160px]"
                         onClick={() => parcelRef.current?.click()}
                     >
@@ -180,28 +225,28 @@ export function Step3Parcel({ formData, handleInputChange, pricing, session, upl
                         </div>
                         <span className="text-sm font-semibold">Upload Parcel Photos</span>
                         <p className="text-xs text-muted-foreground mt-1 text-center">Capture or upload up to 5 photos</p>
-                        <input 
-                            type="file" 
+                        <input
+                            type="file"
                             ref={parcelRef}
-                            multiple 
-                            className="hidden" 
-                            accept="image/*" 
+                            multiple
+                            className="hidden"
+                            accept="image/jpeg,image/png,image/webp"
                             onChange={handleFileChange}
                         />
                     </div>
-                    
+
                     <div className="bg-primary/5 rounded-xl p-4 border border-primary/10 flex flex-col gap-3 min-h-[160px]">
                         <h4 className="text-xs font-bold uppercase tracking-wider text-primary/70 flex items-center gap-2">
                             <ImageIcon className="h-3 w-3" /> Selected Photos ({parcelPhotos.length})
                         </h4>
-                        
+
                         {parcelPhotos.length > 0 ? (
                             <div className="grid grid-cols-3 gap-2">
                                 {parcelPhotos.map((photo: any) => (
-                                    <div key={photo.id} className="relative group aspect-square rounded-lg overflow-hidden border bg-background">
+                                    <div key={photo.id || photo.url} className="relative group aspect-square rounded-lg overflow-hidden border bg-background">
                                         <img src={photo.preview} alt="preview" className="w-full h-full object-cover" />
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); removeFile(photo.id); }}
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); removeFile(photo.id || photo.url); }}
                                             className="absolute top-1 right-1 h-5 w-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                                         >
                                             <X className="h-3 w-3" />

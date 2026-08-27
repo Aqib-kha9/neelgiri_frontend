@@ -18,7 +18,7 @@ const recentBookings = [
 
 const BookingPage = () => {
     const [activeMode, setActiveMode] = useState<"rapid" | "wizard">("rapid");
-    const [todayCount, setTodayCount] = useState(42);
+    const [todayCount, setTodayCount] = useState(0);
 
     const handleBookingSuccess = (bookingId: string) => {
         // Show toast or sound effect here
@@ -26,23 +26,24 @@ const BookingPage = () => {
     };
 
     return (
-        <div className="flex h-[calc(100vh-6rem)] gap-6 p-6">
+        <div className="min-h-[calc(100vh-6rem)] p-3 sm:p-6">
             {/* Main Work Area */}
-            <div className="flex-1 flex flex-col min-w-0 max-w-5xl mx-auto w-full">
-                <header className="flex items-center justify-between mb-6 flex-none">
+            <div className="mx-auto flex w-full max-w-7xl min-w-0 flex-1 flex-col">
+                <header className="mb-4 flex flex-none flex-col gap-4 rounded-2xl border bg-card/70 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                     <div className="space-y-1">
-                        <div className="flex items-center gap-3">
-                            <h1 className="text-2xl font-bold tracking-tight">Create Booking</h1>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <h1 className="text-2xl font-bold tracking-tight">Booking Desk</h1>
                             <Badge variant="outline" className="gap-1 bg-primary/5 text-primary border-primary/20">
-                                <Zap className="w-3 h-3" /> Rapid Mode Active
+                                <Zap className="w-3 h-3" /> {activeMode === "rapid" ? "High-volume mode" : "Guided mode"}
                             </Badge>
+                            <Badge variant="secondary" className="font-mono">{todayCount} this session</Badge>
                         </div>
                         <p className="text-muted-foreground text-sm">
-                            High-speed entry for branch operations. Press <kbd className="px-1 py-0.5 rounded bg-muted border text-xs font-mono">Tab</kbd> to navigate.
+                            Rapid entry is optimized for repetitive booking. Keep the sender locked and change only receiver and parcel details.
                         </p>
                     </div>
 
-                    <div className="flex items-center gap-2 bg-muted/30 p-1 rounded-lg border border-border/40">
+                    <div className="flex items-center gap-2 self-start bg-muted/30 p-1 rounded-lg border border-border/40 sm:self-auto">
                         <Button
                             variant={activeMode === "rapid" ? "default" : "ghost"}
                             size="sm"

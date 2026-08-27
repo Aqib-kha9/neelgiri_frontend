@@ -1,10 +1,31 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { partnerStats } from "./mockData";
+import { PartnerStat } from "./types";
 
-export const PartnerStats = () => {
+interface PartnerStatsProps {
+    stats: PartnerStat[];
+}
+
+export const PartnerStats = ({ stats }: PartnerStatsProps) => {
+    if (stats.length === 0) {
+        return (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {[1, 2, 3, 4].map((i) => (
+                    <Card
+                        key={i}
+                        className="relative overflow-hidden rounded-2xl border-border/70 bg-card/95 shadow-card"
+                    >
+                        <CardContent className="p-6">
+                            <div className="h-20 animate-pulse rounded bg-muted/40" />
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+        );
+    }
+
     return (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {partnerStats.map((stat, index) => (
+            {stats.map((stat, index) => (
                 <Card
                     key={index}
                     className="relative overflow-hidden rounded-2xl border-border/70 bg-card/95 shadow-card transition-all hover:shadow-lg"
@@ -24,16 +45,18 @@ export const PartnerStats = () => {
                             </div>
                         </div>
                         <div className="mt-4 flex items-center gap-2">
-                            <span
-                                className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${stat.trend === "up"
+                            {stat.change && (
+                                <span
+                                    className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${stat.trend === "up"
                                         ? "bg-success/15 text-success"
                                         : stat.trend === "down"
                                             ? "bg-error/15 text-error"
                                             : "bg-muted text-muted-foreground"
-                                    }`}
-                            >
-                                {stat.change}
-                            </span>
+                                        }`}
+                                >
+                                    {stat.change}
+                                </span>
+                            )}
                             <span className="text-xs text-muted-foreground">
                                 {stat.description}
                             </span>

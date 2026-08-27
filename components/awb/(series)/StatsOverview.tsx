@@ -1,32 +1,30 @@
 import { Hash, Package, CheckCircle2, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { awbSeriesData } from "./data/mockData";
 
-const StatsOverview = () => {
-  const getTotalAWBNumbers = () => {
-    return awbSeriesData.reduce(
-      (sum, series) => sum + (series.endRange - series.startRange + 1),
-      0
-    );
-  };
+export interface AwbStats {
+  totalSeries?: number;
+  activeSeries?: number;
+  exhaustedSeries?: number;
+  inactiveSeries?: number;
+  totalCapacity?: number;
+  totalAllocated?: number;
+  totalConsumed?: number;
+  totalAvailable?: number;
+  utilizationRate?: number;
+}
 
-  const getUsedAWBNumbers = () => {
-    return awbSeriesData.reduce((sum, series) => sum + series.usage.used, 0);
-  };
+interface StatsOverviewProps {
+  stats?: AwbStats | null;
+  nearExhaustionCount?: number;
+}
 
-  const getAvailableAWBNumbers = () => {
-    return awbSeriesData.reduce(
-      (sum, series) => sum + series.usage.available,
-      0
-    );
-  };
-
-  const getNearExhaustionCount = () => {
-    return awbSeriesData.filter(
-      (series) => series.usage.percentage >= 80 && series.status === "active"
-    ).length;
-  };
+const StatsOverview = ({ stats, nearExhaustionCount = 0 }: StatsOverviewProps) => {
+  const totalCapacity = stats?.totalCapacity || 0;
+  const totalConsumed = stats?.totalConsumed || 0;
+  const totalAvailable = stats?.totalAvailable || 0;
+  const utilizationPct = totalCapacity > 0 ? Math.round((totalConsumed / totalCapacity) * 100) : 0;
+  const availablePct = totalCapacity > 0 ? Math.round((totalAvailable / totalCapacity) * 100) : 0;
 
   return (
     <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -39,10 +37,10 @@ const StatsOverview = () => {
               </p>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-foreground">
-                  {getTotalAWBNumbers().toLocaleString()}
+                  {totalCapacity.toLocaleString()}
                 </span>
                 <Badge variant="success" className="rounded-full text-xs">
-                  Active
+                  {stats?.activeSeries || 0} Active
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">Across all series</p>
@@ -63,17 +61,14 @@ const StatsOverview = () => {
               </p>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-foreground">
-                  {getAvailableAWBNumbers().toLocaleString()}
+                  {totalAvailable.toLocaleString()}
                 </span>
                 <Badge variant="success" className="rounded-full text-xs">
-                  {Math.round(
-                    (getAvailableAWBNumbers() / getTotalAWBNumbers()) * 100
-                  )}
-                  %
+                  {availablePct}%
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                Ready for allocation
+                Allocated and ready for use
               </p>
             </div>
             <div className="rounded-2xl bg-green-100 p-3">
@@ -92,13 +87,10 @@ const StatsOverview = () => {
               </p>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-foreground">
-                  {getUsedAWBNumbers().toLocaleString()}
+                  {totalConsumed.toLocaleString()}
                 </span>
                 <Badge variant="warning" className="rounded-full text-xs">
-                  {Math.round(
-                    (getUsedAWBNumbers() / getTotalAWBNumbers()) * 100
-                  )}
-                  %
+                  {utilizationPct}%
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">Already utilized</p>
@@ -119,7 +111,7 @@ const StatsOverview = () => {
               </p>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-foreground">
-                  {getNearExhaustionCount()}
+                  {nearExhaustionCount}
                 </span>
                 <Badge variant="error" className="rounded-full text-xs">
                   Attention

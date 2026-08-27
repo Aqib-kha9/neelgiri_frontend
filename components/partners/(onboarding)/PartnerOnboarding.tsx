@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,18 +10,130 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { onboardingStats, onboardingData } from "./mockData";
-import { FileText, Plus, Download, Upload, BarChart3, Search, X, MoreHorizontal, Eye, CheckCircle, XCircle } from "lucide-react";
+import { FileText, Plus, Download, Upload, BarChart3, Search, X, MoreHorizontal, Eye, CheckCircle, XCircle, Loader2, RefreshCw, Clock, UserCheck, UserX, Users } from "lucide-react";
 import { ImportDialog } from "../../warehouse/(inventory)/ImportDialog";
 import { ExportDialog } from "../../warehouse/(inventory)/ExportDialog";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+
+interface OnboardingApp {
+    id: string;
+    applicantName: string;
+    businessName: string;
+    businessType: string;
+    location: string;
+    applicationDate: string;
+    status: string;
+    assignedTo: string;
+}
+
+interface OnboardingStat {
+    title: string;
+    value: string;
+    change: string;
+    trend: "up" | "down";
+    icon: any;
+    description: string;
+}
+
+const mapPartnerToOnboarding = (p: any): OnboardingApp => {
+    const statusMap: Record<string, string> = {
+        PENDING: "pending",
+        ACTIVE: "approved",
+        SUSPENDED: "in-review",
+        TERMINATED: "rejected",
+    };
+    return {
+        id: p._id || p.id || "",
+        applicantName: p.contactPerson || p.userId?.name || "Unknown",
+        businessName: p.companyName || "Unknown Business",
+        businessType: p.type || "retail",
+        location: p.address?.city ? `${p.address.city}, ${p.address.state || ""}` : "—",
+        applicationDate: p.createdAt || p.agreementStartDate || new Date().toISOString(),
+        status: statusMap[p.status] || "pending",
+        assignedTo: p.createdBy?.name || p.createdBy?.email || "—",
+    };
+};
 
 const PartnerOnboarding = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all-status");
     const [isImportOpen, setIsImportOpen] = useState(false);
     const [isExportOpen, setIsExportOpen] = useState(false);
+    const [applications, setApplications] = useState<OnboardingApp[]>([]);
+    const [stats, setStats] = useState<OnboardingStat[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const filteredData = onboardingData.filter((app) => {
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem("token");
+            const headers = { Authorization: `Bearer ${token}` };
+            const [partnersRes, statsRes] = await Promise.all([
+                axios.get(`${API_BASE}/api/partners`, { headers }),
+                axios.get(`${API_BASE}/api/partners/stats`, { headers }),
+            ]);
+
+            const partnerList = Array.isArray(partnersRes.data) ? partnersRes.data : [];
+            const mapped = partnerList.map(mapPartnerToOnboarding);
+            setApplications(mapped);
+
+            const s = statsRes.data || {};
+            const pending = (s.pending || 0) + (s.suspended || 0);
+            const approved = s.active || 0;
+            const rejected = s.terminated || 0;
+            const total = s.total || 0;
+
+            setStats([
+                { title: "Total Applications", value: String(total), change: "+5", trend: "up", icon: Users, description: "All time" },
+                { title: "Pending Review", value: String(pending), change: "+3", trend: "down", icon: Clock, description: "Awaiting review" },
+                { title: "Approved", value: String(approved), change: "+2", trend: "up", icon: UserCheck, description: "Active partners" },
+                { title: "Rejected", value: String(rejected), change: "0", trend: "up", icon: UserX, description: "Terminated" },
+            ]);
+        } catch (error) {
+            toast.error("Failed to load onboarding applications. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const handleApprove = async (partnerId: string) => {
+        try {
+            const token = localStorage.getItem("token");
+            await axios.put(
+                `${API_BASE}/api/partners/${partnerId}`,
+                { status: "ACTIVE" },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            toast.success("Partner application approved!");
+            fetchData();
+        } catch (error: any) {
+            const msg = error?.response?.data?.message || "Failed to approve partner";
+            toast.error(msg);
+        }
+    };
+
+    const handleReject = async (partnerId: string) => {
+        try {
+            const token = localStorage.getItem("token");
+            await axios.put(
+                `${API_BASE}/api/partners/${partnerId}`,
+                { status: "TERMINATED" },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            toast.success("Partner application rejected.");
+            fetchData();
+        } catch (error: any) {
+            const msg = error?.response?.data?.message || "Failed to reject partner";
+            toast.error(msg);
+        }
+    };
+
+    const filteredData = applications.filter((app) => {
         const matchesSearch =
             app.applicantName.toLowerCase().includes(searchQuery.toLowerCase()) ||
             app.businessName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -40,17 +154,17 @@ const PartnerOnboarding = () => {
                         </div>
                         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                             <span className="flex items-center gap-2 rounded-full bg-muted/50 px-3 py-1">
-                                <FileText className="h-3.5 w-3.5 text-primary" />18 pending
+                                <FileText className="h-3.5 w-3.5 text-primary" />{stats[1]?.value || 0} pending
                             </span>
                             <span className="flex items-center gap-2 rounded-full bg-muted/40 px-3 py-1">
-                                <BarChart3 className="h-3.5 w-3.5 text-success" />3.2 days avg
+                                <BarChart3 className="h-3.5 w-3.5 text-success" />{stats[0]?.value || 0} total
                             </span>
                         </div>
                     </div>
                     <div className="flex flex-col gap-3">
                         <div className="flex gap-2">
-                            <Button className="gap-2 rounded-lg bg-primary text-primary-foreground shadow-brand">
-                                <Plus className="h-4 w-4" />New Application
+                            <Button variant="outline" className="gap-2 rounded-lg border-border/70" onClick={fetchData} disabled={loading}>
+                                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Refresh
                             </Button>
                             <Button variant="outline" className="gap-2 rounded-lg border-border/70" onClick={() => setIsExportOpen(true)}>
                                 <Download className="h-4 w-4" />Export
@@ -65,7 +179,7 @@ const PartnerOnboarding = () => {
 
             {/* Stats */}
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                {onboardingStats.map((stat, index) => (
+                {stats.map((stat, index) => (
                     <Card key={index} className="relative overflow-hidden rounded-2xl border-border/70 bg-card/95 shadow-card">
                         <CardContent className="p-6">
                             <div className="flex items-start justify-between">
@@ -138,7 +252,9 @@ const PartnerOnboarding = () => {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredData.length === 0 ? (
+                                {loading ? (
+                                    <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" /></TableCell></TableRow>
+                                ) : filteredData.length === 0 ? (
                                     <TableRow><TableCell colSpan={7} className="h-24 text-center">No applications found.</TableCell></TableRow>
                                 ) : (
                                     filteredData.map((app) => (
@@ -164,8 +280,8 @@ const PartnerOnboarding = () => {
                                                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="rounded-lg"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end" className="rounded-xl">
                                                             <DropdownMenuItem className="flex items-center gap-2 rounded-lg"><Eye className="h-4 w-4" />View Details</DropdownMenuItem>
-                                                            {app.status === "pending" && <DropdownMenuItem className="flex items-center gap-2 rounded-lg text-success"><CheckCircle className="h-4 w-4" />Approve</DropdownMenuItem>}
-                                                            {app.status === "pending" && <DropdownMenuItem className="flex items-center gap-2 rounded-lg text-error"><XCircle className="h-4 w-4" />Reject</DropdownMenuItem>}
+                                                            {app.status === "pending" && <DropdownMenuItem className="flex items-center gap-2 rounded-lg text-success" onClick={() => handleApprove(app.id)}><CheckCircle className="h-4 w-4" />Approve</DropdownMenuItem>}
+                                                            {app.status === "pending" && <DropdownMenuItem className="flex items-center gap-2 rounded-lg text-error" onClick={() => handleReject(app.id)}><XCircle className="h-4 w-4" />Reject</DropdownMenuItem>}
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </div>

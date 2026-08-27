@@ -17,6 +17,7 @@ interface FiltersSectionProps {
   setStatusFilter: (value: string) => void;
   allocationFilter: string;
   setAllocationFilter: (value: string) => void;
+  onRefresh: () => void;
 }
 
 const FiltersSection = ({
@@ -26,6 +27,7 @@ const FiltersSection = ({
   setStatusFilter,
   allocationFilter,
   setAllocationFilter,
+  onRefresh,
 }: FiltersSectionProps) => {
   return (
     <Card className="rounded-2xl border-border/70 bg-card/95 shadow-card">
@@ -51,8 +53,7 @@ const FiltersSection = ({
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
                   <SelectItem value="inactive">Inactive</SelectItem>
-                  <SelectItem value="suspended">Suspended</SelectItem>
-                  <SelectItem value="expired">Expired</SelectItem>
+                  <SelectItem value="expired">Exhausted</SelectItem>
                   <SelectItem value="near_exhaustion">
                     Near Exhaustion
                   </SelectItem>
@@ -101,6 +102,7 @@ const FiltersSection = ({
             <Button
               variant="outline"
               className="gap-2 rounded-xl border-border/70 flex-1 lg:flex-none"
+              onClick={onRefresh}
             >
               <RefreshCw className="h-4 w-4" />
               Refresh

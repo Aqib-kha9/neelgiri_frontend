@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   MapPin,
   Search,
@@ -11,7 +11,10 @@ import {
   Download,
   CheckCircle2,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
+import axios from "axios";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,61 +28,209 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { branches, pincodes, serviceAreas } from "./mockData";
-import { Branch, Pincode, ServiceArea } from "./types";
+import {
+  Branch,
+  Pincode,
+  ServiceArea,
+  mapBackendBranch,
+  mapBackendPincode,
+} from "./types";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+const PINCODE_PAGE_SIZE = 500;
+
+const fetchAllMappedPincodes = async (
+  headers: Record<string, string>
+): Promise<Pincode[]> => {
+  const firstResponse = await axios.get(`${API_BASE}/api/pincodes`, {
+    params: { mapping: "mapped", page: 1, limit: PINCODE_PAGE_SIZE },
+    headers,
+  });
+  const firstPage = firstResponse.data?.pincodes || [];
+  const pageCount = Math.max(Number(firstResponse.data?.pages) || 1, 1);
+
+  const remainingResponses = await Promise.all(
+    Array.from({ length: pageCount - 1 }, (_, index) =>
+      axios.get(`${API_BASE}/api/pincodes`, {
+        params: {
+          mapping: "mapped",
+          page: index + 2,
+          limit: PINCODE_PAGE_SIZE,
+        },
+        headers,
+      })
+    )
+  );
+
+  return [
+    ...firstPage,
+    ...remainingResponses.flatMap(
+      (response) => response.data?.pincodes || []
+    ),
+  ].map(mapBackendPincode);
+};
 
 const ServiceAreas = () => {
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [pincodes, setPincodes] = useState<Pincode[]>([]);
+  const [mappedPincodes, setMappedPincodes] = useState<Pincode[]>([]);
+  const [serviceAreas, setServiceAreas] = useState<ServiceArea[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [pincodeSearch, setPincodeSearch] = useState("");
   const [assignedPincodes, setAssignedPincodes] = useState<string[]>([]);
   const [branchFilter, setBranchFilter] = useState("all");
   const [cityFilter, setCityFilter] = useState("all");
 
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
+
+      const [branchesRes, pincodesRes, allMappedPincodes] = await Promise.all([
+        axios.get(`${API_BASE}/api/branches`, { headers }),
+        axios.get(`${API_BASE}/api/pincodes`, {
+          params: { page: 1, limit: PINCODE_PAGE_SIZE },
+          headers,
+        }),
+        fetchAllMappedPincodes(headers),
+      ]);
+
+      const branchList = Array.isArray(branchesRes.data) ? branchesRes.data : [];
+      const mappedBranches = branchList.map(mapBackendBranch);
+      setBranches(mappedBranches);
+
+      const pincodeList = pincodesRes.data?.pincodes || pincodesRes.data || [];
+      const mappedPincodes = (Array.isArray(pincodeList) ? pincodeList : []).map(
+        mapBackendPincode
+      );
+      setPincodes(mappedPincodes);
+      setMappedPincodes(allMappedPincodes);
+
+      const codesByBranch = new Map<string, Set<string>>();
+      allMappedPincodes.forEach((pincode) => {
+        if (!pincode.branchId || !pincode.pincode) return;
+        if (!codesByBranch.has(pincode.branchId)) {
+          codesByBranch.set(pincode.branchId, new Set());
+        }
+        codesByBranch.get(pincode.branchId)!.add(pincode.pincode);
+      });
+
+      setServiceAreas(
+        Array.from(codesByBranch, ([branchId, codes]) => ({
+          branchId,
+          pincodes: Array.from(codes).sort(),
+          assignedAt: new Date().toISOString(),
+          assignedBy: "System",
+        }))
+      );
+    } catch (error) {
+      console.error("Failed to load service areas data", error);
+      toast.error("Failed to load service areas data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
   // Filtered branches based on status
   const filteredBranches = useMemo(() => {
     return branches.filter(
       (branch) => branchFilter === "all" || branch.status === branchFilter
     );
-  }, [branchFilter]);
+  }, [branches, branchFilter]);
 
-  // Filtered pincodes based on search and city
+  const selectedBranchDetails = useMemo(() => {
+    return branches.find((branch) => branch.id === selectedBranch);
+  }, [branches, selectedBranch]);
+
+  // Search the complete pincode master for the selected branch's geography.
+  useEffect(() => {
+    const search = pincodeSearch.trim();
+    if (!selectedBranchDetails || search.length < 2) return;
+
+    const timeoutId = window.setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get(`${API_BASE}/api/pincodes/global-search`, {
+          params: {
+            q: search,
+            state: selectedBranchDetails.state || undefined,
+            limit: 10,
+          },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const remotePincodes = (response.data?.pincodes || []).map(
+          mapBackendPincode
+        );
+        setPincodes((current) => {
+          const byId = new Map(current.map((pincode) => [pincode.id, pincode]));
+          remotePincodes.forEach((pincode: Pincode) => {
+            if (pincode.id) byId.set(pincode.id, pincode);
+          });
+          return Array.from(byId.values());
+        });
+      } catch (error) {
+        console.error("Failed to search pincodes", error);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [pincodeSearch, selectedBranchDetails]);
+
+  // Filtered pincodes based on search, selected branch geography, and city filter
   const filteredPincodes = useMemo(() => {
     let filtered = pincodes;
+    const branchState = selectedBranchDetails?.state.trim().toLowerCase();
 
-    if (cityFilter !== "all") {
-      filtered = filtered.filter((p) => p.city.toLowerCase() === cityFilter);
+    if (branchState) {
+      filtered = filtered.filter((p) => p.state.trim().toLowerCase() === branchState);
     }
 
-    if (pincodeSearch) {
+    if (cityFilter !== "all") {
       filtered = filtered.filter(
         (p) =>
-          p.pincode.includes(pincodeSearch) ||
-          p.city.toLowerCase().includes(pincodeSearch.toLowerCase()) ||
-          p.district.toLowerCase().includes(pincodeSearch.toLowerCase())
+          p.city.trim().toLowerCase() === cityFilter ||
+          p.district.trim().toLowerCase() === cityFilter
       );
     }
 
-    return filtered.slice(0, 10); // Limit to 10 suggestions
-  }, [pincodeSearch, cityFilter]);
+    if (pincodeSearch) {
+      const search = pincodeSearch.toLowerCase();
+      filtered = filtered.filter(
+        (p) =>
+          p.pincode.includes(search) ||
+          p.city.toLowerCase().includes(search) ||
+          p.district.toLowerCase().includes(search)
+      );
+    }
 
-  // Get selected branch details
-  const selectedBranchDetails = useMemo(() => {
-    return branches.find((branch) => branch.id === selectedBranch);
-  }, [selectedBranch]);
+    return filtered.slice(0, 10);
+  }, [pincodes, pincodeSearch, cityFilter, selectedBranchDetails]);
 
-  // Get assigned pincodes for selected branch
-  const assignedPincodesDetails = useMemo(() => {
-    return pincodes.filter((p) => assignedPincodes.includes(p.pincode));
-  }, [assignedPincodes]);
-
-  // Get all service areas for display
   const allServiceAreas = useMemo(() => {
-    return serviceAreas.map((sa) => ({
-      ...sa,
-      branch: branches.find((b) => b.id === sa.branchId),
-      pincodeDetails: pincodes.filter((p) => sa.pincodes.includes(p.pincode)),
+    return serviceAreas.map((serviceArea) => ({
+      ...serviceArea,
+      branch: branches.find((branch) => branch.id === serviceArea.branchId),
     }));
-  }, []);
+  }, [serviceAreas, branches]);
+
+  const coveredPincodeCount = useMemo(
+    () => new Set(mappedPincodes.map((pincode) => pincode.pincode)).size,
+    [mappedPincodes]
+  );
 
   const handleAddPincode = (pincode: string) => {
     if (!assignedPincodes.includes(pincode)) {
@@ -92,24 +243,76 @@ const ServiceAreas = () => {
     setAssignedPincodes((prev) => prev.filter((p) => p !== pincode));
   };
 
-  const handleSaveServiceArea = () => {
+  const handleSaveServiceArea = async () => {
     if (!selectedBranch || assignedPincodes.length === 0) return;
 
-    // In real app, this would save to backend
-    console.log("Saving service area:", {
-      branchId: selectedBranch,
-      pincodes: assignedPincodes,
-    });
+    setSaving(true);
+    try {
+      const token = localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
 
-    alert("Service area assigned successfully!");
-    setSelectedBranch("");
-    setAssignedPincodes([]);
-    setPincodeSearch("");
+      // Find pincode IDs for the assigned pincodes
+      const pincodeIds = pincodes
+        .filter((p) => assignedPincodes.includes(p.pincode) && p.id)
+        .map((p) => p.id);
+
+      if (pincodeIds.length === 0) {
+        toast.error("Could not find pincode records to assign.");
+        return;
+      }
+
+      // Use bulk-claim endpoint to assign pincodes to the branch
+      await axios.post(
+        `${API_BASE}/api/pincodes/bulk-claim`,
+        {
+          pincodeIds,
+          branchId: selectedBranch,
+        },
+        { headers }
+      );
+
+      toast.success(
+        `Successfully assigned ${assignedPincodes.length} pincodes to branch!`
+      );
+      setSelectedBranch("");
+      setAssignedPincodes([]);
+      setPincodeSearch("");
+      // Refresh data
+      fetchData();
+    } catch (error: any) {
+      const msg =
+        error?.response?.data?.message || "Failed to assign service area";
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const cities = useMemo(() => {
-    return [...new Set(pincodes.map((p) => p.city))].sort();
-  }, []);
+    const branchState = selectedBranchDetails?.state.trim().toLowerCase();
+    return [
+      ...new Set(
+        pincodes
+          .filter(
+            (p) =>
+              !branchState || p.state.trim().toLowerCase() === branchState
+          )
+          .map((p) => p.city || p.district)
+          .filter(Boolean)
+      ),
+    ].sort();
+  }, [pincodes, selectedBranchDetails]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-3 text-muted-foreground">
+          Loading service areas...
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -134,9 +337,10 @@ const ServiceAreas = () => {
           <Button
             variant="outline"
             className="gap-2 rounded-xl border-border/70"
+            onClick={() => fetchData()}
           >
             <Download className="h-4 w-4" />
-            Export
+            Refresh
           </Button>
         </div>
       </div>
@@ -200,11 +404,11 @@ const ServiceAreas = () => {
             <div className="flex items-center justify-between">
               <div className="space-y-2">
                 <p className="text-sm font-medium text-muted-foreground">
-                  Total Pincodes
+                  Covered Pincodes
                 </p>
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl font-bold text-foreground">
-                    {pincodes.length}
+                    {coveredPincodeCount}
                   </span>
                   <Badge variant="warning" className="rounded-full text-xs">
                     Covered
@@ -262,13 +466,17 @@ const ServiceAreas = () => {
                 <Label htmlFor="branch">Select Branch *</Label>
                 <Select
                   value={selectedBranch}
-                  onValueChange={setSelectedBranch}
+                  onValueChange={(branchId) => {
+                    setSelectedBranch(branchId);
+                    setPincodeSearch("");
+                    setCityFilter("all");
+                    setAssignedPincodes([]);
+                  }}
                 >
                   <SelectTrigger className="rounded-lg">
                     <SelectValue placeholder="Choose a branch" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Branches</SelectItem>
                     {filteredBranches.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         <div className="flex items-center gap-2">
@@ -324,7 +532,12 @@ const ServiceAreas = () => {
                   </div>
 
                   {/* Pincode Suggestions */}
-                  {pincodeSearch && filteredPincodes.length > 0 && (
+                  {searchLoading ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Searching {selectedBranchDetails?.state || "the selected branch area"} pincodes...
+                    </div>
+                  ) : pincodeSearch && filteredPincodes.length > 0 ? (
                     <Card className="rounded-lg border-border/60">
                       <CardContent className="p-3">
                         <div className="space-y-2">
@@ -334,7 +547,7 @@ const ServiceAreas = () => {
                           <div className="space-y-1 max-h-40 overflow-y-auto">
                             {filteredPincodes.map((pincode) => (
                               <div
-                                key={pincode.pincode}
+                                key={pincode.id}
                                 className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 cursor-pointer"
                                 onClick={() =>
                                   handleAddPincode(pincode.pincode)
@@ -356,7 +569,7 @@ const ServiceAreas = () => {
                         </div>
                       </CardContent>
                     </Card>
-                  )}
+                  ) : null}
 
                   {/* Assigned Pincodes */}
                   {assignedPincodes.length > 0 && (
@@ -366,20 +579,18 @@ const ServiceAreas = () => {
                       </Label>
                       <div className="rounded-lg border border-border/60 p-3">
                         <div className="flex flex-wrap gap-2">
-                          {assignedPincodesDetails.map((pincode) => (
+                          {assignedPincodes.map((pincode) => (
                             <Badge
-                              key={pincode.pincode}
+                              key={`${selectedBranch}-${pincode}`}
                               variant="outline"
                               className="rounded-full pl-3 pr-2 py-1 flex items-center gap-1"
                             >
-                              {pincode.pincode}
+                              {pincode}
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-4 w-4 p-0 hover:bg-transparent"
-                                onClick={() =>
-                                  handleRemovePincode(pincode.pincode)
-                                }
+                                onClick={() => handleRemovePincode(pincode)}
                               >
                                 <X className="h-3 w-3" />
                               </Button>
@@ -394,10 +605,14 @@ const ServiceAreas = () => {
                   <Button
                     className="w-full gap-2 rounded-lg bg-green-600 hover:bg-green-700"
                     onClick={handleSaveServiceArea}
-                    disabled={assignedPincodes.length === 0}
+                    disabled={assignedPincodes.length === 0 || saving}
                   >
-                    <CheckCircle2 className="h-4 w-4" />
-                    Assign Service Area
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="h-4 w-4" />
+                    )}
+                    {saving ? "Assigning..." : "Assign Service Area"}
                   </Button>
                 </>
               )}
@@ -431,11 +646,11 @@ const ServiceAreas = () => {
                               </div>
                               <div>
                                 <p className="font-medium text-foreground">
-                                  {serviceArea.branch?.name}
+                                  {serviceArea.branch?.name || "Unknown Branch"}
                                 </p>
                                 <p className="text-sm text-muted-foreground">
-                                  {serviceArea.branch?.city},{" "}
-                                  {serviceArea.branch?.state}
+                                  {serviceArea.branch?.city || "—"},{" "}
+                                  {serviceArea.branch?.state || "—"}
                                 </p>
                               </div>
                             </div>
@@ -448,13 +663,13 @@ const ServiceAreas = () => {
                           </div>
 
                           <div className="flex flex-wrap gap-2">
-                            {serviceArea.pincodeDetails.map((pincode) => (
+                            {serviceArea.pincodes.map((pincode) => (
                               <Badge
-                                key={pincode.pincode}
+                                key={`${serviceArea.branchId}-${pincode}`}
                                 variant="outline"
                                 className="rounded-full text-xs"
                               >
-                                {pincode.pincode}
+                                {pincode}
                               </Badge>
                             ))}
                           </div>
@@ -497,7 +712,9 @@ const ServiceAreas = () => {
             <CardContent>
               <div className="space-y-3">
                 {cities.slice(0, 5).map((city) => {
-                  const cityPincodes = pincodes.filter((p) => p.city === city);
+                  const cityPincodes = pincodes.filter(
+                    (p) => p.city === city || p.district === city
+                  );
                   const coveredPincodes = serviceAreas.flatMap(
                     (sa) => sa.pincodes
                   );
@@ -519,9 +736,10 @@ const ServiceAreas = () => {
                           <div
                             className="bg-green-500 h-2 rounded-full"
                             style={{
-                              width: `${
-                                (coveredCount / cityPincodes.length) * 100
-                              }%`,
+                              width: `${cityPincodes.length > 0
+                                ? (coveredCount / cityPincodes.length) * 100
+                                : 0
+                                }%`,
                             }}
                           />
                         </div>

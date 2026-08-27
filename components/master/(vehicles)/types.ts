@@ -1,5 +1,6 @@
 
 export interface Vehicle {
+  _id?: string;
   id: string;
   regNo: string;
   type: 'TRUCK_10T' | 'TRUCK_5T' | 'PICKUP_VAN' | 'BIKE' | 'CONTAINER_32FT';

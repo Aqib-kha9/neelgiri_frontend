@@ -44,9 +44,16 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
             return;
         }
 
-        // --- SPECIFIC EXEMPTION FOR USER MANAGEMENT & MANIFEST (MOVED TO TOP) ---
-        // Allow Sub-Admins to access User Management and Manifests explicitly, overriding missing permissions.
+        // Explicit role-backed routes mirror backend middleware where no dedicated
+        // resource permission exists (notably assigned-rider pickup execution).
         const isAdminRole = ['partner_admin', 'partner', 'branch_admin', 'branch', 'dispatcher'].includes(session.user.role);
+        const isPickupRoute = pathname === '/dashboard/orders/pending-pickups' || pathname === '/dashboard/customers/pickup-requests';
+        const canAccessPickupRoute = ['customer', 'rider', 'partner_admin', 'partner', 'branch_admin', 'branch', 'dispatcher'].includes(session.user.role);
+
+        if (isPickupRoute && canAccessPickupRoute) {
+            setAuthorized(true);
+            return;
+        }
 
         if (isAdminRole) {
             // User Management exemption

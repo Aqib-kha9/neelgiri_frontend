@@ -1,469 +1,454 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import {
+    AlertCircle,
+    ArrowRight,
+    CalendarDays,
+    CheckCircle2,
+    Clock3,
+    IndianRupee,
+    Loader2,
+    MapPinned,
+    Plus,
+    Route as RouteIcon,
+    Trash2,
+    Truck,
+    Warehouse,
+} from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
-import { Route, RouteFormData, RouteStop } from "./types";
-import { MapPin, Truck, Calendar, Plus, Trash2, ArrowRight, CornerDownRight, Clock, Map } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Route, RouteFormData, RouteStop } from "./types";
 
 interface RouteFormProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (data: RouteFormData) => void;
+    onSave: (data: RouteFormData) => Promise<void> | void;
     route: Route | null;
 }
 
-const DAYS_OF_WEEK = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+interface HubOption {
+    id: string;
+    code: string;
+    name: string;
+    city: string;
+    state: string;
+    status: string;
+}
+
+type FormErrors = Partial<Record<"code" | "sourceHub" | "destinationHub" | "schedule" | "finalLeg", string>>;
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+const DAYS = [
+    { value: "MON", label: "Mon" },
+    { value: "TUE", label: "Tue" },
+    { value: "WED", label: "Wed" },
+    { value: "THU", label: "Thu" },
+    { value: "FRI", label: "Fri" },
+    { value: "SAT", label: "Sat" },
+    { value: "SUN", label: "Sun" },
+];
+
+const emptyForm = (): RouteFormData => ({
+    code: "",
+    name: "",
+    sourceCity: "",
+    destinationCity: "",
+    sourceHub: "",
+    sourceHubName: "",
+    destinationHub: "",
+    destinationHubName: "",
+    stops: [],
+    schedule: [],
+    departureTime: "22:00",
+    status: "ACTIVE",
+    type: "LINEHAUL",
+    isReturnRoute: false,
+    baseCost: 0,
+    vehicleTypeRequired: "",
+    finalLegDistanceKm: 0,
+    finalLegTransitTimeMins: 0,
+});
+
+const numberValue = (value: string) => Math.max(0, Number(value) || 0);
+const formatDuration = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours}h ${mins}m`;
+};
 
 const RouteForm = ({ open, onOpenChange, onSave, route }: RouteFormProps) => {
-    const [activeTab, setActiveTab] = useState("basic");
-    const [formData, setFormData] = useState<RouteFormData>({
-        code: "",
-        sourceCity: "",
-        destinationCity: "",
-        sourceHub: "",
-        destinationHub: "",
-        stops: [],
-        schedule: [],
-        departureTime: "00:00",
-        status: "ACTIVE",
-        type: "LINEHAUL",
-        isReturnRoute: false,
-        baseCost: 0,
-        vehicleTypeRequired: "",
-    });
-
-    const [newStop, setNewStop] = useState({
-        hubName: "",
-        distance: 0,
-        transit: 0,
-        halt: 0
-    });
+    const [activeTab, setActiveTab] = useState("network");
+    const [formData, setFormData] = useState<RouteFormData>(emptyForm);
+    const [hubs, setHubs] = useState<HubOption[]>([]);
+    const [loadingHubs, setLoadingHubs] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [errors, setErrors] = useState<FormErrors>({});
+    const [newStop, setNewStop] = useState({ hubId: "", distance: 0, transit: 0, halt: 30 });
 
     useEffect(() => {
+        if (!open) return;
+        setActiveTab("network");
+        setErrors({});
+        setNewStop({ hubId: "", distance: 0, transit: 0, halt: 30 });
         if (route) {
-            const { id, totalDistanceKm, totalTransitTimeHours, ...rest } = route;
-            setFormData(rest);
+            const { id, totalDistanceKm, totalTransitTimeHours, ...editable } = route;
+            setFormData({ ...emptyForm(), ...editable });
         } else {
-            setFormData({
-                code: "",
-                sourceCity: "",
-                destinationCity: "",
-                sourceHub: "",
-                destinationHub: "",
-                stops: [],
-                schedule: [],
-                departureTime: "00:00",
-                status: "ACTIVE",
-                type: "LINEHAUL",
-                isReturnRoute: false,
-                baseCost: 0,
-                vehicleTypeRequired: "",
-            });
+            setFormData(emptyForm());
         }
     }, [route, open]);
 
-    const handleChange = (field: keyof RouteFormData, value: any) => {
-        setFormData((prev) => ({
-            ...prev,
-            [field]: value,
-        }));
+    useEffect(() => {
+        if (!open) return;
+        const fetchHubs = async () => {
+            setLoadingHubs(true);
+            try {
+                const token = localStorage.getItem("token");
+                const { data } = await axios.get(`${API_BASE}/api/locations`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                const list = Array.isArray(data) ? data : data?.data || [];
+                setHubs(list.map((hub: any) => ({
+                    id: hub._id || hub.id,
+                    code: hub.code || "",
+                    name: hub.name || "Unnamed hub",
+                    city: hub.address?.city || hub.city || "",
+                    state: hub.address?.state || hub.state || "",
+                    status: hub.status || "ACTIVE",
+                })).filter((hub: HubOption) => hub.id && hub.status !== "INACTIVE"));
+            } catch {
+                setHubs([]);
+            } finally {
+                setLoadingHubs(false);
+            }
+        };
+        fetchHubs();
+    }, [open]);
+
+    const selectedSource = hubs.find((hub) => hub.id === formData.sourceHub);
+    const selectedDestination = hubs.find((hub) => hub.id === formData.destinationHub);
+    const usedHubIds = new Set([formData.sourceHub, formData.destinationHub, ...formData.stops.map((stop) => stop.hubId)]);
+
+    const metrics = useMemo(() => {
+        const stopDistance = formData.stops.reduce((sum, stop) => sum + numberValue(String(stop.distanceFromPrevKm)), 0);
+        const stopMinutes = formData.stops.reduce(
+            (sum, stop) => sum + numberValue(String(stop.transitTimeFromPrevMins)) + numberValue(String(stop.haltTimeMins)), 0
+        );
+        const distance = stopDistance + numberValue(String(formData.finalLegDistanceKm));
+        const minutes = stopMinutes + numberValue(String(formData.finalLegTransitTimeMins));
+        const costPerKm = distance > 0 ? formData.baseCost / distance : 0;
+        return { distance, minutes, costPerKm };
+    }, [formData.stops, formData.finalLegDistanceKm, formData.finalLegTransitTimeMins, formData.baseCost]);
+
+    const updateField = <K extends keyof RouteFormData>(field: K, value: RouteFormData[K]) => {
+        setFormData((current) => ({ ...current, [field]: value }));
+        setErrors((current) => ({ ...current, [field]: undefined }));
     };
 
-    const handleAddStop = () => {
-        if (!newStop.hubName) return;
+    const selectHub = (kind: "source" | "destination", hubId: string) => {
+        const hub = hubs.find((item) => item.id === hubId);
+        if (!hub) return;
+        if (kind === "source") {
+            setFormData((current) => ({ ...current, sourceHub: hub.id, sourceHubName: hub.name, sourceCity: hub.city }));
+            setErrors((current) => ({ ...current, sourceHub: undefined }));
+        } else {
+            setFormData((current) => ({ ...current, destinationHub: hub.id, destinationHubName: hub.name, destinationCity: hub.city }));
+            setErrors((current) => ({ ...current, destinationHub: undefined }));
+        }
+    };
+
+    const addStop = () => {
+        const hub = hubs.find((item) => item.id === newStop.hubId);
+        if (!hub || newStop.distance <= 0 || newStop.transit <= 0) return;
         const stop: RouteStop = {
-            id: `STOP-${Date.now()}`,
-            hubId: `HUB-${Date.now()}`, // Would integrate with Hub Selector
-            hubName: newStop.hubName,
+            id: `stop-${Date.now()}`,
+            hubId: hub.id,
+            hubName: hub.name,
             sequence: formData.stops.length + 1,
             distanceFromPrevKm: newStop.distance,
             transitTimeFromPrevMins: newStop.transit,
-            haltTimeMins: newStop.halt
+            haltTimeMins: newStop.halt,
         };
-
-        setFormData(prev => ({
-            ...prev,
-            stops: [...prev.stops, stop]
-        }));
-        setNewStop({ hubName: "", distance: 0, transit: 0, halt: 0 });
+        setFormData((current) => ({ ...current, stops: [...current.stops, stop] }));
+        setNewStop({ hubId: "", distance: 0, transit: 0, halt: 30 });
     };
 
-    const handleRemoveStop = (id: string) => {
-        setFormData(prev => ({
-            ...prev,
-            stops: prev.stops.filter(s => s.id !== id)
+    const removeStop = (id: string) => {
+        setFormData((current) => ({
+            ...current,
+            stops: current.stops.filter((stop) => stop.id !== id).map((stop, index) => ({ ...stop, sequence: index + 1 })),
         }));
     };
 
     const toggleDay = (day: string) => {
-        setFormData(prev => {
-            const days = prev.schedule.includes(day)
-                ? prev.schedule.filter(d => d !== day)
-                : [...prev.schedule, day];
-            return { ...prev, schedule: days };
-        });
+        setFormData((current) => ({
+            ...current,
+            schedule: current.schedule.includes(day)
+                ? current.schedule.filter((item) => item !== day)
+                : [...current.schedule, day],
+        }));
+        setErrors((current) => ({ ...current, schedule: undefined }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSave(formData);
-        onOpenChange(false);
+    const useDailySchedule = () => {
+        updateField("schedule", formData.schedule.length === 7 ? [] : DAYS.map((day) => day.value));
     };
 
-    // Calculations for UI feedback
-    const totalKm = formData.stops.reduce((sum, s) => sum + (Number(s.distanceFromPrevKm) || 0), 0);
-    const totalTimeMins = formData.stops.reduce((sum, s) => sum + (Number(s.transitTimeFromPrevMins) || 0) + (Number(s.haltTimeMins) || 0), 0);
-    const totalHours = Math.round(totalTimeMins / 60);
+    const validate = () => {
+        const nextErrors: FormErrors = {};
+        if (!formData.code.trim()) nextErrors.code = "A unique route code is required.";
+        if (!formData.sourceHub) nextErrors.sourceHub = "Select an origin from Location Master.";
+        if (!formData.destinationHub) nextErrors.destinationHub = "Select a destination from Location Master.";
+        if (formData.sourceHub && formData.sourceHub === formData.destinationHub) nextErrors.destinationHub = "Origin and destination cannot be the same.";
+        if (formData.schedule.length === 0) nextErrors.schedule = "Select at least one operating day.";
+        if (formData.finalLegDistanceKm <= 0 || formData.finalLegTransitTimeMins <= 0) {
+            nextErrors.finalLeg = "Enter distance and driving time for the final leg to destination.";
+        }
+        setErrors(nextErrors);
+        if (nextErrors.code || nextErrors.sourceHub || nextErrors.destinationHub) setActiveTab("network");
+        else if (nextErrors.finalLeg) setActiveTab("stops");
+        else if (nextErrors.schedule) setActiveTab("operations");
+        return Object.keys(nextErrors).length === 0;
+    };
+
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!validate()) return;
+        setSaving(true);
+        try {
+            await onSave({ ...formData, code: formData.code.trim().toUpperCase(), name: formData.name?.trim() });
+            onOpenChange(false);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const hasHubMaster = hubs.length > 0;
 
     return (
-        <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-[1000px] sm:w-[1000px] sm:max-w-[1000px] flex flex-col h-full bg-card">
-                <SheetHeader className="flex-none pb-6 border-b border-border/40">
-                    <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                            <Map className="h-5 w-5 text-primary" />
+        <Sheet open={open} onOpenChange={(value) => !saving && onOpenChange(value)}>
+            <SheetContent className="flex h-full w-full flex-col p-0 sm:max-w-[1080px]">
+                <SheetHeader className="border-b bg-gradient-to-r from-slate-50 to-background px-7 py-5 dark:from-slate-950">
+                    <div className="flex items-start gap-4">
+                        <div className="rounded-xl bg-primary p-2.5 text-primary-foreground shadow-sm">
+                            <RouteIcon className="h-5 w-5" />
                         </div>
-                        <div>
-                            <SheetTitle>{route ? "Manage Route Logistics" : "Create New Route"}</SheetTitle>
-                            <SheetDescription>Define network path, timeline, and operational efficiency.</SheetDescription>
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                                <SheetTitle>{route ? "Edit network route" : "Configure network route"}</SheetTitle>
+                                <Badge variant="outline" className="font-normal">Route master</Badge>
+                            </div>
+                            <SheetDescription>
+                                Build an executable origin-to-destination lane with movement legs, cut-off schedule, vehicle and trip economics.
+                            </SheetDescription>
                         </div>
                     </div>
                 </SheetHeader>
 
-                <div className="flex-1 overflow-y-auto">
-                    <form id="route-form" onSubmit={handleSubmit} className="flex flex-col h-full">
-                        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-                            <div className="px-6 pt-6">
-                                <TabsList className="grid w-full grid-cols-3 h-12">
-                                    <TabsTrigger value="basic" className="text-sm">Network Path</TabsTrigger>
-                                    <TabsTrigger value="stops" className="text-sm">Stop Sequence</TabsTrigger>
-                                    <TabsTrigger value="ops" className="text-sm">Schedule & Cost</TabsTrigger>
-                                </TabsList>
-                            </div>
+                <form id="route-form" onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+                    <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
+                        <div className="border-b px-7 py-3">
+                            <TabsList className="grid h-11 w-full grid-cols-3 bg-muted/60">
+                                <TabsTrigger value="network" className="gap-2"><MapPinned className="h-4 w-4" /> 1. Network lane</TabsTrigger>
+                                <TabsTrigger value="stops" className="gap-2"><Warehouse className="h-4 w-4" /> 2. Movement legs</TabsTrigger>
+                                <TabsTrigger value="operations" className="gap-2"><CalendarDays className="h-4 w-4" /> 3. Operations</TabsTrigger>
+                            </TabsList>
+                        </div>
 
-                            <div className="flex-1 p-6">
-                                <TabsContent value="basic" className="mt-0 h-full space-y-8">
-                                    {/* Source & Destination */}
-                                    <div className="grid grid-cols-2 gap-8">
-                                        <div className="p-5 rounded-2xl border border-blue-500/10 bg-blue-500/5 space-y-4">
-                                            <div className="flex items-center gap-2 text-blue-600 mb-2">
-                                                <div className="h-2 w-2 rounded-full bg-blue-500" />
-                                                <span className="text-xs font-bold uppercase tracking-wider">Origin Point</span>
-                                            </div>
-                                            <div className="space-y-3">
-                                                <div className="space-y-1">
-                                                    <Label>Source City</Label>
-                                                    <Input
-                                                        placeholder="e.g. Mumbai"
-                                                        value={formData.sourceCity}
-                                                        onChange={e => handleChange("sourceCity", e.target.value)}
-                                                        className="bg-background"
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label>Source Hub</Label>
-                                                    <Input
-                                                        placeholder="e.g. Mumbai Gateway"
-                                                        value={formData.sourceHub}
-                                                        onChange={e => handleChange("sourceHub", e.target.value)}
-                                                        className="bg-background"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
+                        <ScrollArea className="min-h-0 flex-1">
+                            <div className="p-7">
+                                <TabsContent value="network" className="m-0 space-y-6">
+                                    {!loadingHubs && !hasHubMaster && (
+                                        <Alert>
+                                            <AlertCircle className="h-4 w-4" />
+                                            <AlertDescription>No active locations were found. Create hubs in Location Master before activating a route.</AlertDescription>
+                                        </Alert>
+                                    )}
 
-                                        <div className="p-5 rounded-2xl border border-green-500/10 bg-green-500/5 space-y-4">
-                                            <div className="flex items-center gap-2 text-green-600 mb-2">
-                                                <div className="h-2 w-2 rounded-full bg-green-500" />
-                                                <span className="text-xs font-bold uppercase tracking-wider">Destination Point</span>
+                                    <section className="rounded-xl border bg-card p-5 shadow-sm">
+                                        <div className="mb-5 flex items-center justify-between">
+                                            <div>
+                                                <h3 className="font-semibold">Lane identity</h3>
+                                                <p className="text-sm text-muted-foreground">A short, searchable identity used in trips, manifests and reports.</p>
                                             </div>
-                                            <div className="space-y-3">
-                                                <div className="space-y-1">
-                                                    <Label>Destination City</Label>
-                                                    <Input
-                                                        placeholder="e.g. Delhi"
-                                                        value={formData.destinationCity}
-                                                        onChange={e => handleChange("destinationCity", e.target.value)}
-                                                        className="bg-background"
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label>Destination Hub</Label>
-                                                    <Input
-                                                        placeholder="e.g. Delhi Hub"
-                                                        value={formData.destinationHub}
-                                                        onChange={e => handleChange("destinationHub", e.target.value)}
-                                                        className="bg-background"
-                                                    />
-                                                </div>
+                                            <Badge className={formData.status === "ACTIVE" ? "bg-emerald-600" : ""}>{formData.status}</Badge>
+                                        </div>
+                                        <div className="grid gap-5 md:grid-cols-2">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="route-name">Route name</Label>
+                                                <Input id="route-name" value={formData.name || ""} onChange={(e) => updateField("name", e.target.value)} placeholder="Mumbai to Delhi nightly linehaul" />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="route-code">Route code <span className="text-destructive">*</span></Label>
+                                                <Input id="route-code" value={formData.code} onChange={(e) => updateField("code", e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""))} placeholder="BOM-DEL-LH-01" className="font-mono uppercase" />
+                                                {errors.code && <p className="text-xs text-destructive">{errors.code}</p>}
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Movement type</Label>
+                                                <Select value={formData.type} onValueChange={(value: RouteFormData["type"]) => updateField("type", value)}>
+                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="LINEHAUL">Linehaul · hub to hub / inter-state</SelectItem>
+                                                        <SelectItem value="FEEDER">Feeder · branch to gateway</SelectItem>
+                                                        <SelectItem value="LAST_MILE">Last mile · local delivery run</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Operational status</Label>
+                                                <Select value={formData.status} onValueChange={(value: RouteFormData["status"]) => updateField("status", value)}>
+                                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="ACTIVE">Active · available for trip planning</SelectItem>
+                                                        <SelectItem value="INACTIVE">Inactive · draft / temporarily unused</SelectItem>
+                                                        <SelectItem value="BLOCKED">Blocked · operational restriction</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
                                             </div>
                                         </div>
-                                    </div>
+                                    </section>
 
-                                    <div className="grid grid-cols-3 gap-6">
-                                        <div className="space-y-2">
-                                            <Label>Route Type</Label>
-                                            <Select value={formData.type} onValueChange={(v: any) => handleChange("type", v)}>
-                                                <SelectTrigger>
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="LINEHAUL">Linehaul (Inter-State)</SelectItem>
-                                                    <SelectItem value="FEEDER">Feeder (Intra-State)</SelectItem>
-                                                    <SelectItem value="LAST_MILE">Last Mile (City)</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                    <section className="rounded-xl border bg-card p-5 shadow-sm">
+                                        <div className="mb-5">
+                                            <h3 className="font-semibold">Origin and destination</h3>
+                                            <p className="text-sm text-muted-foreground">Select controlled hubs from Location Master; city details are filled automatically.</p>
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label>Route Code</Label>
-                                            <Input
-                                                value={formData.code}
-                                                onChange={e => handleChange("code", e.target.value)}
-                                                placeholder="e.g. BOM-DEL-L1"
-                                                className="font-mono uppercase"
-                                            />
+                                        <div className="grid items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
+                                            <div className="space-y-3 rounded-xl border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900 dark:bg-blue-950/20">
+                                                <div className="flex items-center gap-2 text-sm font-semibold text-blue-700 dark:text-blue-300"><span className="h-2.5 w-2.5 rounded-full bg-blue-600" /> Origin hub</div>
+                                                <Select value={formData.sourceHub} onValueChange={(value) => selectHub("source", value)} disabled={loadingHubs}>
+                                                    <SelectTrigger><SelectValue placeholder={loadingHubs ? "Loading hubs..." : "Select dispatch hub"} /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {hubs.filter((hub) => hub.id !== formData.destinationHub).map((hub) => <SelectItem key={hub.id} value={hub.id}>{hub.code} · {hub.name} ({hub.city})</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                                <div className="min-h-10 text-sm"><span className="text-muted-foreground">City / State</span><p className="font-medium">{selectedSource ? `${selectedSource.city}, ${selectedSource.state}` : "—"}</p></div>
+                                                {errors.sourceHub && <p className="text-xs text-destructive">{errors.sourceHub}</p>}
+                                            </div>
+                                            <div className="flex h-9 w-9 items-center justify-center rounded-full border bg-background"><ArrowRight className="h-4 w-4 text-muted-foreground" /></div>
+                                            <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900 dark:bg-emerald-950/20">
+                                                <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300"><span className="h-2.5 w-2.5 rounded-full bg-emerald-600" /> Destination hub</div>
+                                                <Select value={formData.destinationHub} onValueChange={(value) => selectHub("destination", value)} disabled={loadingHubs}>
+                                                    <SelectTrigger><SelectValue placeholder={loadingHubs ? "Loading hubs..." : "Select receiving hub"} /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {hubs.filter((hub) => hub.id !== formData.sourceHub).map((hub) => <SelectItem key={hub.id} value={hub.id}>{hub.code} · {hub.name} ({hub.city})</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                                <div className="min-h-10 text-sm"><span className="text-muted-foreground">City / State</span><p className="font-medium">{selectedDestination ? `${selectedDestination.city}, ${selectedDestination.state}` : "—"}</p></div>
+                                                {errors.destinationHub && <p className="text-xs text-destructive">{errors.destinationHub}</p>}
+                                            </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label>Status</Label>
-                                            <Select value={formData.status} onValueChange={(v: any) => handleChange("status", v)}>
-                                                <SelectTrigger>
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="ACTIVE">Active</SelectItem>
-                                                    <SelectItem value="INACTIVE">Inactive</SelectItem>
-                                                    <SelectItem value="BLOCKED">Blocked</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
+                                    </section>
                                 </TabsContent>
 
-                                <TabsContent value="stops" className="mt-0 h-full flex flex-col gap-6">
-                                    {/* Visual Timeline Header */}
-                                    <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-border/50">
-                                        <div className="flex items-center gap-4">
-                                            <div className="text-sm">
-                                                <span className="text-muted-foreground mr-1">Total Distance:</span>
-                                                <span className="font-mono font-bold">{totalKm} km</span>
-                                            </div>
-                                            <div className="h-4 w-[1px] bg-border/50"></div>
-                                            <div className="text-sm">
-                                                <span className="text-muted-foreground mr-1">Est. Duration:</span>
-                                                <span className="font-mono font-bold text-primary">{totalHours}h</span>
-                                            </div>
-                                        </div>
-                                        <Badge variant="outline" className="font-mono text-[10px] tracking-widest uppercase text-muted-foreground">
-                                            {formData.stops.length} Intermediate Stops
-                                        </Badge>
+                                <TabsContent value="stops" className="m-0 space-y-5">
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <Metric icon={MapPinned} label="Planned distance" value={`${metrics.distance.toLocaleString("en-IN")} km`} />
+                                        <Metric icon={Clock3} label="Driving + halt time" value={formatDuration(metrics.minutes)} />
+                                        <Metric icon={Warehouse} label="Intermediate hubs" value={String(formData.stops.length)} />
                                     </div>
 
-                                    <div className="flex-1 flex gap-6 min-h-0">
-                                        {/* Stops List */}
-                                        <ScrollArea className="flex-1 pr-4 border-r border-border/40">
-                                            <div className="space-y-8 relative pb-10">
-                                                {/* Route Line */}
-                                                <div className="absolute left-[19px] top-8 bottom-0 w-[2px] bg-border/60 z-0"></div>
-
-                                                {/* Start Node */}
-                                                <div className="relative z-10 flex gap-4">
-                                                    <div className="h-10 w-10 flex-none rounded-full border-4 border-background bg-blue-100 flex items-center justify-center">
-                                                        <div className="h-3 w-3 rounded-full bg-blue-600"></div>
-                                                    </div>
-                                                    <div className="mt-2">
-                                                        <h4 className="font-semibold text-sm">{formData.sourceHub || "Source Hub"}</h4>
-                                                        <p className="text-xs text-muted-foreground">Origin</p>
-                                                    </div>
-                                                </div>
-
+                                    <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
+                                        <section className="rounded-xl border bg-card p-5 shadow-sm">
+                                            <div className="mb-5">
+                                                <h3 className="font-semibold">Ordered route timeline</h3>
+                                                <p className="text-sm text-muted-foreground">Each leg records road distance, drive time and handling halt at the arrival hub.</p>
+                                            </div>
+                                            <div className="relative space-y-4 before:absolute before:bottom-6 before:left-[17px] before:top-6 before:w-px before:bg-border">
+                                                <TimelineNode tone="blue" title={formData.sourceHubName || "Select origin hub"} subtitle="Dispatch origin · departure point" />
                                                 {formData.stops.map((stop, index) => (
-                                                    <div key={stop.id} className="relative z-10 flex gap-4 group">
-                                                        <div className="h-10 w-10 flex-none rounded-full border-4 border-background bg-muted flex items-center justify-center">
-                                                            <span className="text-xs font-mono font-medium text-muted-foreground">{index + 1}</span>
-                                                        </div>
-                                                        <div className="flex-1 pt-0.5">
-                                                            <div className="flex items-center justify-between p-3 rounded-lg border border-border/60 bg-card hover:border-primary/30 transition-colors shadow-sm">
-                                                                <div>
-                                                                    <h4 className="font-medium text-sm">{stop.hubName}</h4>
-                                                                    <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
-                                                                        <span className="flex items-center gap-1"><ArrowRight className="h-3 w-3" /> {stop.distanceFromPrevKm} km</span>
-                                                                        <span className="flex items-center gap-1"><Truck className="h-3 w-3" /> {stop.transitTimeFromPrevMins} mins</span>
-                                                                        <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {stop.haltTimeMins} mins halt</span>
-                                                                    </div>
-                                                                </div>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-7 w-7 text-muted-foreground hover:text-red-500"
-                                                                    onClick={() => handleRemoveStop(stop.id)}
-                                                                >
-                                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                                </Button>
-                                                            </div>
+                                                    <div key={stop.id} className="relative flex gap-4 pl-0">
+                                                        <div className="z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-4 border-background bg-slate-200 text-xs font-semibold dark:bg-slate-700">{index + 1}</div>
+                                                        <div className="flex flex-1 items-center justify-between rounded-lg border bg-background p-3">
+                                                            <div><p className="text-sm font-semibold">{stop.hubName}</p><p className="mt-1 text-xs text-muted-foreground">{stop.distanceFromPrevKm} km · {formatDuration(stop.transitTimeFromPrevMins)} drive · {stop.haltTimeMins}m halt</p></div>
+                                                            <Button type="button" variant="ghost" size="icon" onClick={() => removeStop(stop.id)} aria-label={`Remove ${stop.hubName}`}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                                         </div>
                                                     </div>
                                                 ))}
+                                                <TimelineNode tone="green" title={formData.destinationHubName || "Select destination hub"} subtitle={`${formData.finalLegDistanceKm} km · ${formatDuration(formData.finalLegTransitTimeMins)} final drive`} />
+                                            </div>
+                                        </section>
 
-                                                {/* End Node */}
-                                                <div className="relative z-10 flex gap-4">
-                                                    <div className="h-10 w-10 flex-none rounded-full border-4 border-background bg-green-100 flex items-center justify-center">
-                                                        <div className="h-3 w-3 rounded-full bg-green-600"></div>
-                                                    </div>
-                                                    <div className="mt-2">
-                                                        <h4 className="font-semibold text-sm">{formData.destinationHub || "Destination Hub"}</h4>
-                                                        <p className="text-xs text-muted-foreground">Final Destination</p>
-                                                    </div>
+                                        <div className="space-y-5">
+                                            <section className="rounded-xl border bg-muted/30 p-5">
+                                                <h3 className="font-semibold">Add intermediate hub</h3>
+                                                <p className="mb-4 text-xs text-muted-foreground">Skip this when the lane is direct.</p>
+                                                <div className="space-y-3">
+                                                    <div className="space-y-1.5"><Label>Arrival hub</Label><Select value={newStop.hubId} onValueChange={(hubId) => setNewStop((current) => ({ ...current, hubId }))}><SelectTrigger><SelectValue placeholder="Select next hub" /></SelectTrigger><SelectContent>{hubs.filter((hub) => !usedHubIds.has(hub.id)).map((hub) => <SelectItem key={hub.id} value={hub.id}>{hub.code} · {hub.name}</SelectItem>)}</SelectContent></Select></div>
+                                                    <div className="grid grid-cols-2 gap-3"><NumberField label="Leg distance (km)" value={newStop.distance} onChange={(distance) => setNewStop((current) => ({ ...current, distance }))} /><NumberField label="Drive time (min)" value={newStop.transit} onChange={(transit) => setNewStop((current) => ({ ...current, transit }))} /></div>
+                                                    <NumberField label="Handling halt (min)" value={newStop.halt} onChange={(halt) => setNewStop((current) => ({ ...current, halt }))} />
+                                                    <Button type="button" variant="outline" className="w-full" onClick={addStop} disabled={!newStop.hubId || newStop.distance <= 0 || newStop.transit <= 0}><Plus className="mr-2 h-4 w-4" /> Add to timeline</Button>
                                                 </div>
-                                            </div>
-                                        </ScrollArea>
+                                            </section>
 
-                                        {/* Add Stop Panel */}
-                                        <div className="w-[320px] bg-muted/20 rounded-xl p-5 border border-border/50 h-fit space-y-5">
-                                            <div className="space-y-1">
-                                                <h4 className="font-semibold text-sm">Add Intermediate Stop</h4>
-                                                <p className="text-xs text-muted-foreground">Define next hop details.</p>
-                                            </div>
-                                            <Separator />
-                                            <div className="space-y-3">
-                                                <div className="space-y-1">
-                                                    <Label className="text-xs">Hub Name</Label>
-                                                    <Input
-                                                        className="h-8 bg-background"
-                                                        placeholder="Select Hub"
-                                                        value={newStop.hubName}
-                                                        onChange={e => setNewStop({ ...newStop, hubName: e.target.value })}
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label className="text-xs">Distance (km)</Label>
-                                                    <Input
-                                                        type="number" className="h-8 bg-background"
-                                                        value={newStop.distance}
-                                                        onChange={e => setNewStop({ ...newStop, distance: parseInt(e.target.value) })}
-                                                    />
-                                                    <p className="text-[9px] text-muted-foreground">From previous point</p>
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <div className="space-y-1">
-                                                        <Label className="text-xs">Transit (min)</Label>
-                                                        <Input
-                                                            type="number" className="h-8 bg-background"
-                                                            value={newStop.transit}
-                                                            onChange={e => setNewStop({ ...newStop, transit: parseInt(e.target.value) })}
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <Label className="text-xs">Halt (min)</Label>
-                                                        <Input
-                                                            type="number" className="h-8 bg-background"
-                                                            value={newStop.halt}
-                                                            onChange={e => setNewStop({ ...newStop, halt: parseInt(e.target.value) })}
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <Button size="sm" className="w-full mt-2" onClick={handleAddStop} disabled={!newStop.hubName}>
-                                                    <Plus className="h-3.5 w-3.5 mr-2" /> Add Stop
-                                                </Button>
-                                            </div>
+                                            <section className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-5 dark:border-emerald-900 dark:bg-emerald-950/20">
+                                                <h3 className="font-semibold">Final leg to destination <span className="text-destructive">*</span></h3>
+                                                <p className="mb-4 text-xs text-muted-foreground">From {formData.stops.at(-1)?.hubName || formData.sourceHubName || "previous hub"} to {formData.destinationHubName || "destination"}.</p>
+                                                <div className="grid grid-cols-2 gap-3"><NumberField label="Distance (km)" value={formData.finalLegDistanceKm} onChange={(value) => updateField("finalLegDistanceKm", value)} /><NumberField label="Drive time (min)" value={formData.finalLegTransitTimeMins} onChange={(value) => updateField("finalLegTransitTimeMins", value)} /></div>
+                                                {errors.finalLeg && <p className="mt-2 text-xs text-destructive">{errors.finalLeg}</p>}
+                                            </section>
                                         </div>
                                     </div>
                                 </TabsContent>
 
-                                <TabsContent value="ops" className="mt-0 h-full space-y-6">
-                                    <div className="grid grid-cols-2 gap-8">
-                                        <div className="space-y-4">
-                                            <h4 className="font-semibold text-sm flex items-center gap-2">
-                                                <Calendar className="h-4 w-4" /> Operational Schedule
-                                            </h4>
-                                            <div className="grid grid-cols-4 gap-3">
-                                                {DAYS_OF_WEEK.map(day => (
-                                                    <div
-                                                        key={day}
-                                                        className={`
-                                            cursor-pointer flex items-center justify-center p-2 rounded-lg border text-sm font-medium transition-all
-                                            ${formData.schedule.includes(day)
-                                                                ? 'bg-primary text-primary-foreground border-primary'
-                                                                : 'bg-background hover:bg-muted border-input text-muted-foreground'}
-                                        `}
-                                                        onClick={() => toggleDay(day)}
-                                                    >
-                                                        {day}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                            <div className="pt-2 space-y-2">
-                                                <Label>Departure Time</Label>
-                                                <Input
-                                                    type="time"
-                                                    value={formData.departureTime}
-                                                    onChange={e => handleChange("departureTime", e.target.value)}
-                                                    className="w-[150px]"
-                                                />
-                                            </div>
-                                        </div>
+                                <TabsContent value="operations" className="m-0 space-y-5">
+                                    <div className="grid gap-5 lg:grid-cols-2">
+                                        <section className="rounded-xl border bg-card p-5 shadow-sm">
+                                            <div className="mb-5 flex items-start justify-between"><div><h3 className="font-semibold">Dispatch calendar</h3><p className="text-sm text-muted-foreground">Recurring departure from the origin hub.</p></div><CalendarDays className="h-5 w-5 text-muted-foreground" /></div>
+                                            <div className="mb-3 flex items-center justify-between"><Label>Operating days <span className="text-destructive">*</span></Label><Button type="button" variant="ghost" size="sm" onClick={useDailySchedule}>{formData.schedule.length === 7 ? "Clear all" : "Select daily"}</Button></div>
+                                            <div className="grid grid-cols-7 gap-2">{DAYS.map((day) => <button key={day.value} type="button" onClick={() => toggleDay(day.value)} className={`rounded-lg border px-1 py-2 text-xs font-medium transition-colors ${formData.schedule.includes(day.value) ? "border-primary bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>{day.label}</button>)}</div>
+                                            {errors.schedule && <p className="mt-2 text-xs text-destructive">{errors.schedule}</p>}
+                                            <div className="mt-5 space-y-2"><Label htmlFor="departure">Scheduled departure</Label><Input id="departure" type="time" value={formData.departureTime} onChange={(e) => updateField("departureTime", e.target.value)} className="max-w-48" /><p className="text-xs text-muted-foreground">Use the origin hub's local time.</p></div>
+                                        </section>
 
-                                        <div className="space-y-4">
-                                            <h4 className="font-semibold text-sm flex items-center gap-2">
-                                                <Truck className="h-4 w-4" /> Vehicle & Costing
-                                            </h4>
-                                            <div className="space-y-3">
-                                                <div className="space-y-1">
-                                                    <Label>Required Vehicle Type</Label>
-                                                    <Select
-                                                        value={formData.vehicleTypeRequired}
-                                                        onValueChange={(v: any) => handleChange("vehicleTypeRequired", v)}
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Any" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="32FT MXL">32FT MXL Container</SelectItem>
-                                                            <SelectItem value="20FT SXL">20FT SXL Container</SelectItem>
-                                                            <SelectItem value="TATA 407">Tata 407 (Feeder)</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label>Estimated Base Cost (₹)</Label>
-                                                    <Input
-                                                        type="number"
-                                                        value={formData.baseCost}
-                                                        onChange={e => handleChange("baseCost", parseInt(e.target.value))}
-                                                    />
-                                                    <p className="text-[10px] text-muted-foreground">Includes fuel and toll for one-way trip.</p>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <section className="rounded-xl border bg-card p-5 shadow-sm">
+                                            <div className="mb-5 flex items-start justify-between"><div><h3 className="font-semibold">Capacity profile</h3><p className="text-sm text-muted-foreground">The default vehicle expected for trip allocation.</p></div><Truck className="h-5 w-5 text-muted-foreground" /></div>
+                                            <div className="space-y-2"><Label>Required vehicle</Label><Select value={formData.vehicleTypeRequired || "ANY"} onValueChange={(value) => updateField("vehicleTypeRequired", value === "ANY" ? "" : value)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ANY">Any compatible vehicle</SelectItem><SelectItem value="32FT MXL">32FT MXL · 14–15 MT</SelectItem><SelectItem value="32FT SXL">32FT SXL · 7–9 MT</SelectItem><SelectItem value="20FT SXL">20FT SXL · 6–7 MT</SelectItem><SelectItem value="TATA 407">Tata 407 · 2.5 MT</SelectItem><SelectItem value="LCV">LCV / pickup · up to 1.5 MT</SelectItem></SelectContent></Select></div>
+                                            <div className="mt-5 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">Vehicle availability is checked during trip creation; this value acts as the default planning constraint.</div>
+                                        </section>
                                     </div>
+
+                                    <section className="rounded-xl border bg-card p-5 shadow-sm">
+                                        <div className="mb-5 flex items-start justify-between"><div><h3 className="font-semibold">One-way trip economics</h3><p className="text-sm text-muted-foreground">Expected fixed cost including vendor freight, fuel, toll and driver allowance.</p></div><IndianRupee className="h-5 w-5 text-muted-foreground" /></div>
+                                        <div className="grid gap-4 md:grid-cols-3"><div className="space-y-2"><Label htmlFor="cost">Estimated base cost (₹)</Label><Input id="cost" type="number" min="0" value={formData.baseCost} onChange={(e) => updateField("baseCost", numberValue(e.target.value))} /></div><Metric icon={IndianRupee} label="Estimated cost / km" value={metrics.distance ? `₹${metrics.costPerKm.toFixed(2)}` : "—"} /><Metric icon={Clock3} label="Planned transit" value={formatDuration(metrics.minutes)} /></div>
+                                    </section>
+
+                                    <Alert className="border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20"><CheckCircle2 className="h-4 w-4 text-emerald-600" /><AlertDescription><strong>Activation check:</strong> active routes become available to auto-routing and trip planning immediately after save. Keep the route inactive while operational approvals are pending.</AlertDescription></Alert>
                                 </TabsContent>
                             </div>
-                        </Tabs>
+                        </ScrollArea>
+                    </Tabs>
 
-                        <SheetFooter className="p-6 border-t border-border/40 mt-auto">
-                            <Button variant="outline" onClick={() => onOpenChange(false)} type="button">Cancel</Button>
-                            <Button type="submit">Save Configuration</Button>
-                        </SheetFooter>
-                    </form>
-                </div>
+                    <SheetFooter className="border-t bg-background px-7 py-4 sm:justify-between">
+                        <div className="hidden items-center gap-4 text-xs text-muted-foreground sm:flex"><span>{metrics.distance} km planned</span><Separator orientation="vertical" className="h-4" /><span>{formatDuration(metrics.minutes)} transit</span><Separator orientation="vertical" className="h-4" /><span>{formData.schedule.length} operating days</span></div>
+                        <div className="flex gap-2"><Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancel</Button><Button type="submit" disabled={saving || loadingHubs}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{route ? "Update route" : "Save route configuration"}</Button></div>
+                    </SheetFooter>
+                </form>
             </SheetContent>
         </Sheet>
     );
 };
+
+const Metric = ({ icon: Icon, label, value }: { icon: typeof MapPinned; label: string; value: string }) => (
+    <div className="flex items-center gap-3 rounded-xl border bg-card p-4"><div className="rounded-lg bg-primary/10 p-2 text-primary"><Icon className="h-4 w-4" /></div><div><p className="text-xs text-muted-foreground">{label}</p><p className="font-semibold">{value}</p></div></div>
+);
+
+const TimelineNode = ({ tone, title, subtitle }: { tone: "blue" | "green"; title: string; subtitle: string }) => (
+    <div className="relative flex gap-4"><div className={`z-10 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-4 border-background ${tone === "blue" ? "bg-blue-600" : "bg-emerald-600"}`}><span className="h-2 w-2 rounded-full bg-white" /></div><div className="pt-0.5"><p className="text-sm font-semibold">{title}</p><p className="text-xs text-muted-foreground">{subtitle}</p></div></div>
+);
+
+const NumberField = ({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) => (
+    <div className="space-y-1.5"><Label className="text-xs">{label}</Label><Input type="number" min="0" value={value} onChange={(event) => onChange(numberValue(event.target.value))} /></div>
+);
 
 export default RouteForm;

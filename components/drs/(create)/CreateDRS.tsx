@@ -57,21 +57,6 @@ import { DirectCompleteTable } from "../shared/DirectCompleteTable";
 import { cn } from "@/lib/utils";
 import { TrackingDialog } from "@/components/shared/TrackingDialog";
 
-// Mock data for created DRS
-const mockCreatedDRS = [
-  {
-    id: "DRS-001",
-    drsNumber: "DRS-001",
-    rider: { name: "Rahul Kumar", phone: "+91 98765 43210" },
-    vehicleMode: "Bike",
-    pincodes: ["110001", "110002"],
-    shipments: ["AWB12345", "AWB12346", "AWB12347"],
-    stats: { totalShipments: 3, totalCOD: 4500 },
-    status: "draft",
-    date: new Date().toLocaleDateString(),
-  },
-];
-
 import ShipmentSelection from "./ShipmentSelection";
 
 const ShipmentSelectionContainer = ({ onOpenQuickDRS, shipments, onRefresh }: { onOpenQuickDRS: (shipments: string[]) => void, shipments: any[], onRefresh: () => void }) => {

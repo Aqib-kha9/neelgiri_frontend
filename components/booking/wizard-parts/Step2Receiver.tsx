@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { apiClient } from "@/lib/api-client";
 import { GooglePlacesAutocomplete } from "./GooglePlacesAutocomplete";
 
 interface Step2ReceiverProps {
@@ -48,13 +49,13 @@ export function Step2Receiver({ formData, handleInputChange, session, selectSave
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-2">
                 <div className="space-y-4">
                     <h3 className="text-sm font-semibold text-foreground border-b pb-2">Receiver Information</h3>
-                    
+
                     <div className="space-y-2 p-3 rounded-lg bg-blue-50/50 border border-blue-100">
                         <Label className="text-sm font-semibold text-blue-700 flex items-center gap-2">
                             <Shield className="h-4 w-4" /> Smart Fetch via GSTIN
                         </Label>
                         <div className="flex gap-2">
-                            <Input 
+                            <Input
                                 placeholder="Enter 15-digit GSTIN"
                                 value={formData.receiverGstin || ""}
                                 onChange={(e) => handleInputChange("receiverGstin", e.target.value)}
@@ -62,7 +63,7 @@ export function Step2Receiver({ formData, handleInputChange, session, selectSave
                                 className="border-blue-200 bg-white focus:border-blue-400 font-mono uppercase"
                                 maxLength={15}
                             />
-                            <Button 
+                            <Button
                                 type="button"
                                 size="sm"
                                 variant="outline"
@@ -76,34 +77,27 @@ export function Step2Receiver({ formData, handleInputChange, session, selectSave
                                     }
                                     setIsFetching(true);
                                     try {
-                                        const token = localStorage.getItem("token");
-                                        const res = await fetch(`/api/shipments/compliance/gstin/${gstin}`, {
-                                            headers: { Authorization: `Bearer ${token}` }
-                                        });
-                                        const data = await res.json();
-                                        
-                                        // CORRECT MAPPING: Sandbox returns { data: { data: { ... } } }
-                                        const biz = data.data?.data || data.data; 
+                                        const data = await apiClient.get<any>(`/shipments/compliance/gstin/${encodeURIComponent(gstin)}`);
+                                        const biz = data.data?.data || data.data;
 
-                                        if (res.ok && biz) {
-                                            handleInputChange("receiverName", (biz.lgnm || biz.trade_name || biz.tradeNam || "").toString());
-                                            
-                                            // Construct address from pradr (Primary Address)
-                                            const addr = biz.pradr?.addr || {};
-                                            const formattedAddr = `${addr.bnm || ''} ${addr.bno || ''} ${addr.flno || ''} ${addr.loc || ''} ${addr.locality || ''} ${addr.st || ''}`.replace(/\s+/g, ' ').trim();
-                                            
-                                            handleInputChange("receiverAddressLine1", formattedAddr || "");
-                                            handleInputChange("receiverPincode", (addr.pncd || "").toString());
-                                            handleInputChange("receiverCity", (addr.dst || "").toString());
-                                            handleInputChange("receiverState", (addr.stcd || "").toString());
-                                            
-                                            alert("Success: Details populated!");
-                                        } else {
-                                            alert(`Error: ${data.message || "GSTIN details not found"}`);
+                                        if (!biz) {
+                                            throw new Error("GSTIN details not found");
                                         }
+
+                                        handleInputChange("receiverName", (biz.lgnm || biz.trade_name || biz.tradeNam || "").toString());
+
+                                        const addr = biz.pradr?.addr || {};
+                                        const formattedAddr = `${addr.bnm || ''} ${addr.bno || ''} ${addr.flno || ''} ${addr.loc || ''} ${addr.locality || ''} ${addr.st || ''}`.replace(/\s+/g, ' ').trim();
+
+                                        handleInputChange("receiverAddressLine1", formattedAddr || "");
+                                        handleInputChange("receiverPincode", (addr.pncd || "").toString());
+                                        handleInputChange("receiverCity", (addr.dst || "").toString());
+                                        handleInputChange("receiverState", (addr.stcd || "").toString());
+
+                                        alert("Success: Details populated!");
                                     } catch (err) {
                                         console.error("GST Fetch failed", err);
-                                        alert("Failed to connect to verification service");
+                                        alert(err instanceof Error ? err.message : "Failed to connect to verification service");
                                     } finally {
                                         setIsFetching(false);
                                     }
@@ -123,9 +117,9 @@ export function Step2Receiver({ formData, handleInputChange, session, selectSave
                             <span className="bg-background px-2 text-muted-foreground">Or Search via Google</span>
                         </div>
                     </div>
-                    
+
                     <div className="mb-2">
-                        <GooglePlacesAutocomplete 
+                        <GooglePlacesAutocomplete
                             onSelect={(details) => {
                                 // Don't auto-fill name if it's empty (skipName is true)
                                 if (details.name) handleInputChange("receiverName", details.name);
@@ -134,9 +128,9 @@ export function Step2Receiver({ formData, handleInputChange, session, selectSave
                                 if (details.city) handleInputChange("receiverCity", details.city);
                                 if (details.state) handleInputChange("receiverState", details.state);
                                 if (details.address) handleInputChange("receiverAddressLine1", details.address);
-                            }} 
+                            }}
                             skipName={true}
-                            label="Google Places Search" 
+                            label="Google Places Search"
                             placeholder="Type business name..."
                         />
                     </div>

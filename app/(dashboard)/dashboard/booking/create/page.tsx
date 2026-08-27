@@ -17,7 +17,11 @@ export default function CreateBookingPage() {
   }
 
   if (session?.user?.role === 'customer') {
-    return <div className="p-6"><CustomerBookingWizard /></div>;
+    return (
+      <div className="min-h-[calc(100vh-6rem)] bg-muted/20 px-3 py-4 sm:px-6 sm:py-6">
+        <CustomerBookingWizard />
+      </div>
+    );
   }
 
   return <BookingPage />;

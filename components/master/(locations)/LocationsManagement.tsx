@@ -1,24 +1,47 @@
 // components/master/locations/LocationsManagement.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import LocationsHeader from "./LocationsHeader";
 import LocationsStats from "./LocationsStats";
 import LocationsFilters from "./LocationsFilters";
 import LocationsList from "./LocationsList";
 import LocationForm from "./LocationForm";
-import { Location, LocationFormData } from "./types";
-import { mockLocations } from "./mockData";
+import { Location, LocationFormData, mapBackendLocation, mapLocationToBackend } from "./types";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 
 const LocationsManagement = () => {
-  const [locations, setLocations] = useState<Location[]>(mockLocations);
-  const [selectedLocation, setSelectedLocation] = useState<Location | null>(
-    null
-  );
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  const fetchLocations = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.get(`${API_BASE}/api/locations`, { headers });
+      const list = Array.isArray(res.data) ? res.data : [];
+      setLocations(list.map(mapBackendLocation));
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || "Failed to load locations.";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLocations();
+  }, [fetchLocations]);
 
   const handleAddLocation = () => {
     setSelectedLocation(null);
@@ -30,43 +53,60 @@ const LocationsManagement = () => {
     setShowForm(true);
   };
 
-  const handleSaveLocation = (formData: LocationFormData) => {
-    if (selectedLocation) {
-      // Update existing location
-      setLocations(
-        locations.map((l) =>
-          l.id === selectedLocation.id ? { ...l, ...formData } : l
-        )
-      );
-    } else {
-      // Add new location
-      const newLocation: Location = {
-        id: `LOC-${Date.now()}`,
-        ...formData,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setLocations([...locations, newLocation]);
+  const handleSaveLocation = async (formData: LocationFormData) => {
+    try {
+      const token = localStorage.getItem("token");
+      const headers = { Authorization: `Bearer ${token}` };
+      const payload = mapLocationToBackend(formData);
+
+      if (selectedLocation) {
+        await axios.put(`${API_BASE}/api/locations/${selectedLocation.id}`, payload, { headers });
+        toast.success("Location updated successfully!");
+      } else {
+        await axios.post(`${API_BASE}/api/locations`, payload, { headers });
+        toast.success("Location created successfully!");
+      }
+      setShowForm(false);
+      setSelectedLocation(null);
+      fetchLocations();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || "Failed to save location.";
+      toast.error(msg);
     }
-    setShowForm(false);
-    setSelectedLocation(null);
   };
 
-  const handleDeleteLocation = (locationId: string) => {
-    setLocations(locations.filter((l) => l.id !== locationId));
+  const handleDeleteLocation = async (locationId: string) => {
+    if (!confirm("Are you sure you want to delete this location?")) return;
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete(`${API_BASE}/api/locations/${locationId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success("Location deleted.");
+      fetchLocations();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || "Failed to delete location.";
+      toast.error(msg);
+    }
   };
 
-  const handleToggleStatus = (locationId: string) => {
-    setLocations(
-      locations.map((location) =>
-        location.id === locationId
-          ? {
-            ...location,
-            status: location.status === "active" ? "inactive" : "active",
-          }
-          : location
-      )
-    );
+  const handleToggleStatus = async (locationId: string) => {
+    const loc = locations.find((l) => l.id === locationId);
+    if (!loc) return;
+    const newStatus = loc.status === "active" ? "INACTIVE" : "ACTIVE";
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(
+        `${API_BASE}/api/locations/${locationId}`,
+        { status: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success("Location status updated.");
+      fetchLocations();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || "Failed to update status.";
+      toast.error(msg);
+    }
   };
 
   const filteredLocations = locations.filter((location) => {
@@ -83,6 +123,14 @@ const LocationsManagement = () => {
 
     return matchesSearch && matchesType && matchesStatus;
   });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-7 p-6">

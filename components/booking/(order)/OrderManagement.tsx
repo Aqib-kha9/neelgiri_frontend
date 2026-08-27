@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { apiClient } from "@/lib/api-client";
 import { Package, Download, Plus, RefreshCcw, Loader2, InboxIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -116,12 +117,12 @@ function mapShipmentToOrder(s: any): Order {
     status: (statusMap[s.status] || "booked") as Order["status"],
     bookedDate: s.createdAt
       ? new Date(s.createdAt).toLocaleString("en-IN", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
       : "—",
     lastUpdated: s.updatedAt
       ? new Date(s.updatedAt).toLocaleString("en-IN", { day: "2-digit", month: "short" })
@@ -152,12 +153,7 @@ export const OrderManagement = () => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch("/api/shipments", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed to fetch orders");
-      const data = await res.json();
+      const data = await apiClient.get<unknown[]>("/shipments");
       setOrders(data.map(mapShipmentToOrder));
     } catch (err: any) {
       setError(err.message || "Something went wrong");
@@ -210,7 +206,7 @@ export const OrderManagement = () => {
             Refresh
           </Button>
           <Button asChild className="gap-2 rounded-xl bg-primary text-primary-foreground shadow-brand hover:shadow-brand-lg">
-            <Link href="/dashboard/create-booking">
+            <Link href="/dashboard/booking/create">
               <Plus className="h-4 w-4" />
               New Booking
             </Link>
@@ -263,7 +259,7 @@ export const OrderManagement = () => {
                     : "Your bookings will appear here once created."}
                 </p>
                 <Button asChild className="gap-2 rounded-xl bg-primary text-primary-foreground shadow-brand">
-                  <Link href="/dashboard/create-booking">
+                  <Link href="/dashboard/booking/create">
                     <Plus className="h-4 w-4" />
                     Create New Booking
                   </Link>

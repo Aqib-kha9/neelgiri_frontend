@@ -117,10 +117,18 @@ const RatesManagement = () => {
         );
     };
 
-    const handleDelete = (rateId: string) => {
-        if (confirm("Are you sure you want to delete this rate rule?")) {
-            console.log("Delete rate:", rateId);
-            // API call here
+    const handleDelete = async (rateId: string) => {
+        if (!confirm("Are you sure you want to delete this rate rule?")) return;
+        try {
+            const token = localStorage.getItem("token");
+            await axios.delete(`/api/rates/${rateId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            toast.success("Rate rule deleted successfully");
+            fetchRates();
+        } catch (error: any) {
+            const msg = error?.response?.data?.message || "Failed to delete rate rule";
+            toast.error(msg);
         }
     };
 

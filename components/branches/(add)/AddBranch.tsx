@@ -1,6 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
+import { toast } from "sonner";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   Building,
   MapPin,
@@ -16,6 +20,7 @@ import {
   X,
   Download,
   FileText,
+  Loader2,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -34,10 +39,61 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { BranchFormData, BulkUploadData } from "./types";
-import { cities, states } from "./mockData";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
+
+interface IndiaStateOption {
+  name: string;
+  isoCode: string;
+}
+
+type PincodeValidationStatus = "idle" | "checking" | "valid" | "invalid";
+
+interface BranchPincodeValidationResponse {
+  valid: true;
+  pincode: string;
+  officeName: string;
+  district: string;
+  state: string;
+}
+
+interface PartnerOption {
+  _id: string;
+  partnerCode: string;
+  companyName: string;
+  userId?: {
+    _id: string;
+    name: string;
+    email: string;
+    phone?: string;
+    status?: string;
+  } | null;
+  status: string;
+}
 
 const AddBranch = () => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { session } = useAuth();
+  const editId = searchParams.get("edit");
   const [activeTab, setActiveTab] = useState<"single" | "bulk">("single");
+  const [submitting, setSubmitting] = useState(false);
+  const [states, setStates] = useState<IndiaStateOption[]>([]);
+  const [cities, setCities] = useState<string[]>([]);
+  const [selectedStateCode, setSelectedStateCode] = useState("");
+  const [statesLoading, setStatesLoading] = useState(true);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+  const [statesError, setStatesError] = useState("");
+  const [citiesError, setCitiesError] = useState("");
+  const [pincodeStatus, setPincodeStatus] =
+    useState<PincodeValidationStatus>("idle");
+  const [pincodeMessage, setPincodeMessage] = useState("");
+  const [validatedPincodeKey, setValidatedPincodeKey] = useState("");
+  const [partners, setPartners] = useState<PartnerOption[]>([]);
+  const [partnersLoading, setPartnersLoading] = useState(false);
+  const [partnersError, setPartnersError] = useState("");
+  const [selectedPartnerId, setSelectedPartnerId] = useState("");
+  const isSuperAdmin = session?.user?.role === "super_admin";
   const [formData, setFormData] = useState<BranchFormData>({
     // Basic Information
     name: "",
@@ -84,11 +140,182 @@ const AddBranch = () => {
 
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadStates = async () => {
+      setStatesLoading(true);
+      setStatesError("");
+
+      try {
+        const { data } = await axios.get<{ states: IndiaStateOption[] }>(
+          `${API_BASE}/api/places/india/states`,
+          { signal: controller.signal }
+        );
+        setStates(data.states);
+      } catch (error) {
+        if (!axios.isCancel(error)) {
+          console.error("Failed to load Indian states", error);
+          setStatesError("States could not be loaded. Please try again.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setStatesLoading(false);
+      }
+    };
+
+    loadStates();
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedStateCode) {
+      setCities([]);
+      setCitiesError("");
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const loadCities = async () => {
+      setCitiesLoading(true);
+      setCitiesError("");
+      setCities([]);
+
+      try {
+        const { data } = await axios.get<{ cities: string[] }>(
+          `${API_BASE}/api/places/india/cities`,
+          {
+            params: { stateCode: selectedStateCode },
+            signal: controller.signal,
+          }
+        );
+        setCities(data.cities);
+      } catch (error) {
+        if (!axios.isCancel(error)) {
+          console.error("Failed to load cities", error);
+          setCitiesError("Cities could not be loaded. Please try again.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setCitiesLoading(false);
+      }
+    };
+
+    loadCities();
+    return () => controller.abort();
+  }, [selectedStateCode]);
+
+  useEffect(() => {
+    if (!isSuperAdmin || formData.type !== "partner") {
+      setPartners([]);
+      setPartnersError("");
+      setPartnersLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const loadPartners = async () => {
+      setPartnersLoading(true);
+      setPartnersError("");
+      try {
+        const token = localStorage.getItem("token");
+        const { data } = await axios.get<PartnerOption[]>(
+          `${API_BASE}/api/partners`,
+          {
+            params: { status: "ACTIVE" },
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          }
+        );
+        setPartners(Array.isArray(data) ? data : []);
+      } catch (error) {
+        if (!axios.isCancel(error)) {
+          console.error("Failed to load active partners", error);
+          setPartnersError("Active partners could not be loaded.");
+        }
+      } finally {
+        if (!controller.signal.aborted) setPartnersLoading(false);
+      }
+    };
+
+    loadPartners();
+    return () => controller.abort();
+  }, [formData.type, isSuperAdmin]);
+
+  useEffect(() => {
+    const pincode = formData.pincode.trim();
+    const validationKey = `${pincode}|${formData.state}|${formData.city}`;
+
+    setValidatedPincodeKey("");
+    if (!pincode || !formData.state || !formData.city) {
+      setPincodeStatus("idle");
+      setPincodeMessage("");
+      return;
+    }
+    if (!/^\d{6}$/.test(pincode)) {
+      setPincodeStatus("invalid");
+      setPincodeMessage("Enter exactly 6 digits");
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setPincodeStatus("checking");
+      setPincodeMessage("Verifying with Pincode Master...");
+
+      try {
+        const token = localStorage.getItem("token");
+        const { data } = await axios.get<BranchPincodeValidationResponse>(
+          `${API_BASE}/api/pincodes/validate-branch/${pincode}`,
+          {
+            params: { state: formData.state, city: formData.city },
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          }
+        );
+        const location = [data.officeName, data.district]
+          .filter(Boolean)
+          .join(", ");
+        setPincodeStatus("valid");
+        setPincodeMessage(
+          location ? `Verified: ${location}, ${data.state}` : "Pincode verified"
+        );
+        setValidatedPincodeKey(validationKey);
+      } catch (error: any) {
+        if (!axios.isCancel(error)) {
+          setPincodeStatus("invalid");
+          setPincodeMessage(
+            error?.response?.data?.message || "Pincode could not be verified"
+          );
+        }
+      }
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [formData.pincode, formData.state, formData.city]);
+
+  const handleStateChange = (stateCode: string) => {
+    const selectedState = states.find((state) => state.isoCode === stateCode);
+    setSelectedStateCode(stateCode);
+    setFormData((prev) => ({
+      ...prev,
+      state: selectedState?.name || "",
+      city: "",
+    }));
+  };
+
   const handleInputChange = (field: keyof BranchFormData, value: any) => {
     setFormData((prev) => ({
       ...prev,
       [field]: value,
     }));
+  };
+
+  const handleOwnershipChange = (value: "company" | "partner") => {
+    handleInputChange("type", value);
+    if (value === "company") setSelectedPartnerId("");
   };
 
   const handleNestedChange = (
@@ -146,16 +373,113 @@ const AddBranch = () => {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Branch Data:", formData);
-    alert("Branch created successfully!");
+    if (!formData.name.trim() || !formData.code.trim()) {
+      toast.error("Branch name and code are required");
+      return;
+    }
+    if (!formData.address || !formData.state || !formData.city || !formData.pincode) {
+      toast.error("Address, state, city, and pincode are required");
+      return;
+    }
+    const currentPincodeKey = `${formData.pincode.trim()}|${formData.state}|${formData.city}`;
+    if (
+      !/^\d{6}$/.test(formData.pincode.trim()) ||
+      pincodeStatus !== "valid" ||
+      validatedPincodeKey !== currentPincodeKey
+    ) {
+      toast.error("Enter a valid Pincode Master entry for the selected state and city");
+      return;
+    }
+    if (!editId && isSuperAdmin && formData.type === "partner" && !selectedPartnerId) {
+      toast.error("Select an active partner for a partner-owned branch");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem("token");
+      const payload = {
+        name: formData.name.trim(),
+        code: formData.code.trim().toUpperCase(),
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        pincode: formData.pincode,
+        phone: formData.phone,
+        contact: formData.email,
+        type: "branch",
+        ownershipType: formData.type,
+        operationalType: "branch",
+        serviceArea: formData.serviceArea,
+        managerName: formData.managerName,
+        managerEmail: formData.managerEmail,
+        managerPhone: formData.managerPhone,
+        staffCount: formData.staffCount ? Number(formData.staffCount) : 0,
+        emergencyContact: formData.emergencyContact,
+        supportEmail: formData.supportEmail,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
+        operatingHours: formData.operatingHours,
+        workingDays: formData.workingDays,
+        maxDailyCapacity: formData.maxDailyCapacity ? Number(formData.maxDailyCapacity) : 0,
+        serviceRadius: formData.serviceRadius ? Number(formData.serviceRadius) : 0,
+        hasWarehouse: formData.hasWarehouse,
+        hasPickupCounter: formData.hasPickupCounter,
+        isActive: formData.status === "active",
+        ...(isSuperAdmin && !editId && formData.type === "partner"
+          ? { partnerId: selectedPartnerId }
+          : {}),
+      };
+
+      if (editId) {
+        await axios.put(`${API_BASE}/api/branches/${editId}`, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        toast.success("Branch updated successfully!");
+      } else {
+        await axios.post(`${API_BASE}/api/branches`, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        toast.success("Branch created successfully!");
+      }
+      router.push("/dashboard/branches");
+    } catch (error: any) {
+      console.error("Failed to save branch", error);
+      const msg = error?.response?.data?.message || "Failed to save branch";
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleBulkSubmit = (e: React.FormEvent) => {
+  const handleBulkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Bulk Upload Data:", bulkUploadData);
-    alert("Branches uploaded successfully!");
+    if (!bulkUploadData.file) {
+      toast.error("Please select a CSV file to upload");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem("token");
+      const formDataObj = new FormData();
+      formDataObj.append("file", bulkUploadData.file);
+
+      await axios.post(`${API_BASE}/api/branches/bulk`, formDataObj, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      toast.success("Branches uploaded successfully!");
+      router.push("/dashboard/branches");
+    } catch (error: any) {
+      console.error("Failed to upload branches", error);
+      const msg = error?.response?.data?.message || "Failed to upload branches";
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -289,27 +613,34 @@ const AddBranch = () => {
                       />
                     </div>
 
-                    {/* <div className="space-y-2">
+                    <div className="space-y-2">
                       <Label htmlFor="code">Branch Code *</Label>
                       <Input
                         id="code"
-                        placeholder="e.g., MUM-CENT"
+                        placeholder="e.g., DEL-CENT"
                         value={formData.code}
                         onChange={(e) =>
-                          handleInputChange("code", e.target.value)
+                          handleInputChange(
+                            "code",
+                            e.target.value
+                              .toUpperCase()
+                              .replace(/[^A-Z0-9-]/g, "")
+                          )
                         }
+                        maxLength={30}
                         required
-                        className="rounded-lg"
+                        className="rounded-lg font-mono uppercase"
                       />
-                    </div> */}
+                      <p className="text-xs text-muted-foreground">
+                        Unique identifier using letters, numbers, and hyphens.
+                      </p>
+                    </div>
 
                     <div className="space-y-2">
                       <Label>Branch Type *</Label>
                       <RadioGroup
                         value={formData.type}
-                        onValueChange={(value: "company" | "partner") =>
-                          handleInputChange("type", value)
-                        }
+                        onValueChange={handleOwnershipChange}
                         className="space-y-2"
                       >
                         <div className="flex items-center space-x-2">
@@ -334,6 +665,47 @@ const AddBranch = () => {
                         </div>
                       </RadioGroup>
                     </div>
+
+                    {isSuperAdmin && formData.type === "partner" && !editId && (
+                      <div className="space-y-2">
+                        <Label htmlFor="partner-account">Partner Account *</Label>
+                        <Select
+                          value={selectedPartnerId}
+                          onValueChange={setSelectedPartnerId}
+                          disabled={partnersLoading || partners.length === 0}
+                        >
+                          <SelectTrigger id="partner-account" className="rounded-lg">
+                            <SelectValue
+                              placeholder={
+                                partnersLoading
+                                  ? "Loading active partners..."
+                                  : "Select an active partner"
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {partners.map((partner) => {
+                              if (!partner.userId?._id) return null;
+                              return (
+                                <SelectItem
+                                  key={partner.userId._id}
+                                  value={partner.userId._id}
+                                >
+                                  {partner.companyName} ({partner.partnerCode})
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                        {partnersError ? (
+                          <p className="text-xs text-destructive">{partnersError}</p>
+                        ) : partners.length === 0 && !partnersLoading ? (
+                          <p className="text-xs text-muted-foreground">
+                            No active partner accounts are available.
+                          </p>
+                        ) : null}
+                      </div>
+                    )}
 
                     <div className="space-y-2">
                       <Label htmlFor="status">Status</Label>
@@ -433,59 +805,105 @@ const AddBranch = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-2">
+                      <Label htmlFor="state">State *</Label>
+                      <Select
+                        value={selectedStateCode}
+                        onValueChange={handleStateChange}
+                        disabled={statesLoading || Boolean(statesError)}
+                      >
+                        <SelectTrigger id="state" className="rounded-lg">
+                          <SelectValue
+                            placeholder={statesLoading ? "Loading states..." : "Select state"}
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {states.map((state) => (
+                            <SelectItem key={state.isoCode} value={state.isoCode}>
+                              {state.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {statesError && (
+                        <p className="text-xs text-destructive">{statesError}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
                       <Label htmlFor="city">City *</Label>
                       <Select
                         value={formData.city}
-                        onValueChange={(value) =>
-                          handleInputChange("city", value)
+                        onValueChange={(value) => handleInputChange("city", value)}
+                        disabled={
+                          !selectedStateCode ||
+                          citiesLoading ||
+                          Boolean(citiesError) ||
+                          cities.length === 0
                         }
                       >
-                        <SelectTrigger className="rounded-lg">
-                          <SelectValue placeholder="Select city" />
+                        <SelectTrigger id="city" className="rounded-lg">
+                          <SelectValue
+                            placeholder={
+                              !selectedStateCode
+                                ? "Select state first"
+                                : citiesLoading
+                                  ? "Loading cities..."
+                                  : cities.length === 0
+                                    ? "No cities available"
+                                    : "Select city"
+                            }
+                          />
                         </SelectTrigger>
                         <SelectContent>
                           {cities.map((city) => (
-                            <SelectItem key={city} value={city.toLowerCase()}>
+                            <SelectItem key={city} value={city}>
                               {city}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="state">State *</Label>
-                      <Select
-                        value={formData.state}
-                        onValueChange={(value) =>
-                          handleInputChange("state", value)
-                        }
-                      >
-                        <SelectTrigger className="rounded-lg">
-                          <SelectValue placeholder="Select state" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {states.map((state) => (
-                            <SelectItem key={state} value={state.toLowerCase()}>
-                              {state}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {citiesError && (
+                        <p className="text-xs text-destructive">{citiesError}</p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="pincode">Pincode *</Label>
-                      <Input
-                        id="pincode"
-                        placeholder="e.g., 400001"
-                        value={formData.pincode}
-                        onChange={(e) =>
-                          handleInputChange("pincode", e.target.value)
-                        }
-                        required
-                        className="rounded-lg"
-                      />
+                      <div className="relative">
+                        <Input
+                          id="pincode"
+                          placeholder="e.g., 400001"
+                          value={formData.pincode}
+                          onChange={(e) =>
+                            handleInputChange(
+                              "pincode",
+                              e.target.value.replace(/\D/g, "").slice(0, 6)
+                            )
+                          }
+                          inputMode="numeric"
+                          maxLength={6}
+                          required
+                          className="rounded-lg pr-10"
+                        />
+                        {pincodeStatus === "checking" && (
+                          <Loader2 className="absolute right-3 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                        {pincodeStatus === "valid" && (
+                          <CheckCircle2 className="absolute right-3 top-2.5 h-4 w-4 text-green-600" />
+                        )}
+                      </div>
+                      {pincodeMessage && (
+                        <p
+                          className={`text-xs ${pincodeStatus === "valid"
+                            ? "text-green-600"
+                            : pincodeStatus === "invalid"
+                              ? "text-destructive"
+                              : "text-muted-foreground"
+                            }`}
+                        >
+                          {pincodeMessage}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -784,9 +1202,14 @@ const AddBranch = () => {
                   type="submit"
                   className="gap-2 rounded-xl bg-green-600 hover:bg-green-700"
                   size="lg"
+                  disabled={submitting || pincodeStatus === "checking"}
                 >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Create Branch
+                  {submitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
+                  {editId ? "Update Branch" : "Create Branch"}
                 </Button>
               </div>
             </div>
@@ -880,9 +1303,13 @@ const AddBranch = () => {
                 type="submit"
                 className="gap-2 rounded-xl bg-green-600 hover:bg-green-700"
                 size="lg"
-                disabled={!bulkUploadData.file}
+                disabled={!bulkUploadData.file || submitting}
               >
-                <Upload className="h-4 w-4" />
+                {submitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
                 Upload Branches
               </Button>
             </div>

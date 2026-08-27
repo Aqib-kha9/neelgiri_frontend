@@ -5,9 +5,10 @@ import SeriesCard from "./SeriesCard";
 
 interface SeriesListProps {
   series: any[];
+  onCreate: () => void;
 }
 
-const SeriesList = ({ series }: SeriesListProps) => {
+const SeriesList = ({ series, onCreate }: SeriesListProps) => {
   return (
     <div className="space-y-4">
       {series.map((seriesItem) => (
@@ -24,7 +25,10 @@ const SeriesList = ({ series }: SeriesListProps) => {
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               Get started by creating your first AWB series for allocation.
             </p>
-            <Button className="gap-2 rounded-xl bg-primary text-primary-foreground shadow-brand">
+            <Button
+              className="gap-2 rounded-xl bg-primary text-primary-foreground shadow-brand"
+              onClick={onCreate}
+            >
               <Plus className="h-4 w-4" />
               Create AWB Series
             </Button>

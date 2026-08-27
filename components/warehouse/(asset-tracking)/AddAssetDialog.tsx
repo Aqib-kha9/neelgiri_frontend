@@ -21,12 +21,14 @@ import { Textarea } from "@/components/ui/textarea";
 interface AddAssetDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onSaved?: () => void;
 }
 
-export const AddAssetDialog = ({ open, onOpenChange }: AddAssetDialogProps) => {
+export const AddAssetDialog = ({ open, onOpenChange, onSaved }: AddAssetDialogProps) => {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         // Handle form submission
+        onSaved?.();
         onOpenChange(false);
     };
 

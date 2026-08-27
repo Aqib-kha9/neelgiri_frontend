@@ -1,35 +1,35 @@
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Ban, AlertCircle, Clock } from "lucide-react";
-import { statusConfig } from "./data/mockData";
+import { Ban, CheckCircle2, Clock } from "lucide-react";
 
 interface StatusBadgeProps {
   status: string;
 }
 
-const StatusBadge = ({ status }: StatusBadgeProps) => {
-  const config = statusConfig[status as keyof typeof statusConfig];
-  if (!config) return null;
+const statusConfig = {
+  active: {
+    label: "Active",
+    color: "border-green-200 bg-green-50 text-green-700",
+    icon: CheckCircle2,
+  },
+  inactive: {
+    label: "Inactive",
+    color: "border-gray-200 bg-gray-50 text-gray-700",
+    icon: Ban,
+  },
+  expired: {
+    label: "Exhausted",
+    color: "border-orange-200 bg-orange-50 text-orange-700",
+    icon: Clock,
+  },
+} as const;
 
-  const IconComponent = () => {
-    switch (config.icon) {
-      case "CheckCircle2":
-        return <CheckCircle2 className="h-3 w-3" />;
-      case "Ban":
-        return <Ban className="h-3 w-3" />;
-      case "AlertCircle":
-        return <AlertCircle className="h-3 w-3" />;
-      case "Clock":
-        return <Clock className="h-3 w-3" />;
-      default:
-        return <AlertCircle className="h-3 w-3" />;
-    }
-  };
+const StatusBadge = ({ status }: StatusBadgeProps) => {
+  const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.inactive;
+  const Icon = config.icon;
 
   return (
-    <Badge
-      className={`rounded-full border ${config.color} px-3 py-1.5 flex items-center gap-1.5`}
-    >
-      <IconComponent />
+    <Badge className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 ${config.color}`}>
+      <Icon className="h-3 w-3" />
       {config.label}
     </Badge>
   );

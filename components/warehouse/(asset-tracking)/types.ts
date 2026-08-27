@@ -1,4 +1,5 @@
 export interface Asset {
+    _id?: string;
     id: string;
     name: string;
     assetId: string;
@@ -12,6 +13,29 @@ export interface Asset {
     assignedTo: string;
     lastMaintenance: string;
     nextMaintenance: string;
+    // Backend fields
+    assetCode?: string;
+    type?: string;
+    description?: string;
+    purchasePrice?: number;
+    vendor?: string;
+    warrantyExpiry?: string;
+    depreciationRate?: number;
+    warehouseId?: string;
+    warehouseName?: string;
+    assignedToName?: string;
+    assignedAt?: string;
+}
+
+export interface AssetStatsResponse {
+    total: number;
+    active: number;
+    assigned: number;
+    maintenance: number;
+    retired: number;
+    lost: number;
+    totalPurchaseValue: number;
+    totalCurrentValue: number;
 }
 
 export interface AssetStat {

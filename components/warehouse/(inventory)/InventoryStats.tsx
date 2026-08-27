@@ -1,10 +1,56 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { inventoryStats } from "./mockData";
+import { Package, AlertTriangle, XCircle, IndianRupee } from "lucide-react";
+import { InventoryStatsResponse, InventoryItem } from "./types";
 
-export const InventoryStats = () => {
+interface InventoryStatsProps {
+    stats?: InventoryStatsResponse | null;
+    items?: InventoryItem[];
+}
+
+export const InventoryStats = ({ stats, items }: InventoryStatsProps) => {
+    const totalItems = stats?.total ?? items?.length ?? 0;
+    const lowStock = stats?.lowStock ?? items?.filter(i => i.status === "low-stock").length ?? 0;
+    const outOfStock = stats?.outOfStock ?? items?.filter(i => i.status === "out-of-stock").length ?? 0;
+    const totalValue = stats?.totalValue ?? items?.reduce((acc, i) => acc + (i.totalValue || 0), 0) ?? 0;
+
+    const displayStats = [
+        {
+            title: "Total Items",
+            value: totalItems.toLocaleString("en-IN"),
+            change: `${totalItems}`,
+            trend: "up" as const,
+            icon: Package,
+            description: "Active SKUs",
+        },
+        {
+            title: "Low Stock Alerts",
+            value: lowStock.toString(),
+            change: `${lowStock}`,
+            trend: "down" as const,
+            icon: AlertTriangle,
+            description: "Needs restock",
+        },
+        {
+            title: "Out of Stock",
+            value: outOfStock.toString(),
+            change: `${outOfStock}`,
+            trend: "down" as const,
+            icon: XCircle,
+            description: "Urgent action",
+        },
+        {
+            title: "Total Value",
+            value: `₹${(totalValue / 100000).toFixed(2)}L`,
+            change: `${totalValue.toLocaleString("en-IN")}`,
+            trend: "up" as const,
+            icon: IndianRupee,
+            description: "Inventory worth",
+        },
+    ];
+
     return (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {inventoryStats.map((stat, index) => (
+            {displayStats.map((stat, index) => (
                 <Card
                     key={index}
                     className="relative overflow-hidden rounded-2xl border-border/70 bg-card/95 shadow-card transition-all hover:shadow-lg"

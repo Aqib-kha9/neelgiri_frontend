@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,37 +10,118 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { IndianRupee, Clock, CheckCircle, TrendingUp, BarChart3, Search, X, MoreHorizontal, Eye, Download, Upload, CreditCard } from "lucide-react";
+import { IndianRupee, Clock, CheckCircle, TrendingUp, BarChart3, Search, X, MoreHorizontal, Eye, Download, Upload, CreditCard, Loader2, RefreshCw } from "lucide-react";
 import { ImportDialog } from "../../warehouse/(inventory)/ImportDialog";
 import { ExportDialog } from "../../warehouse/(inventory)/ExportDialog";
 
-const settlementStats = [
-    { title: "Pending Settlements", value: "32", change: "+8", trend: "down", icon: Clock, description: "Awaiting processing" },
-    { title: "Processed Today", value: "18", change: "+6", trend: "up", icon: CheckCircle, description: "Completed" },
-    { title: "Total Amount", value: "₹45.8L", change: "+12.5%", trend: "up", icon: IndianRupee, description: "This month" },
-    { title: "Avg Settlement Time", value: "2.5 days", change: "-0.3", trend: "up", icon: TrendingUp, description: "Faster processing" },
-];
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 
-const settlementData = [
-    { id: "SET-001", partnerName: "Spice Garden Restaurant", period: "Dec 1-15, 2024", amountDue: 285000, status: "pending", dueDate: "2024-12-25", paymentMethod: "Bank Transfer" },
-    { id: "SET-002", partnerName: "FreshMart Grocery", period: "Dec 1-15, 2024", amountDue: 195000, status: "processed", dueDate: "2024-12-23", paymentMethod: "UPI" },
-    { id: "SET-003", partnerName: "HealthPlus Pharmacy", period: "Dec 1-15, 2024", amountDue: 125000, status: "pending", dueDate: "2024-12-26", paymentMethod: "Bank Transfer" },
-    { id: "SET-004", partnerName: "Burger King Express", period: "Dec 1-15, 2024", amountDue: 320000, status: "processing", dueDate: "2024-12-24", paymentMethod: "Bank Transfer" },
-    { id: "SET-005", partnerName: "MediCare Plus", period: "Dec 1-15, 2024", amountDue: 145000, status: "processed", dueDate: "2024-12-22", paymentMethod: "UPI" },
-    { id: "SET-006", partnerName: "Pizza Paradise", period: "Dec 1-15, 2024", amountDue: 210000, status: "pending", dueDate: "2024-12-27", paymentMethod: "Bank Transfer" },
-];
+interface Settlement {
+    id: string;
+    invoiceNo: string;
+    partnerName: string;
+    period: string;
+    amountDue: number;
+    amountPaid: number;
+    balanceDue: number;
+    status: string;
+    dueDate: string;
+    paymentMethod: string;
+}
+
+interface SettlementStat {
+    title: string;
+    value: string;
+    change: string;
+    trend: "up" | "down";
+    icon: any;
+    description: string;
+}
+
+const mapInvoiceToSettlement = (inv: any): Settlement => {
+    const periodStart = inv.billingPeriodStart ? new Date(inv.billingPeriodStart).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "";
+    const periodEnd = inv.billingPeriodEnd ? new Date(inv.billingPeriodEnd).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "";
+    const period = periodStart || periodEnd ? `${periodStart} - ${periodEnd}` : new Date(inv.invoiceDate).toLocaleDateString("en-IN");
+
+    const lastPayment = inv.payments && inv.payments.length > 0 ? inv.payments[inv.payments.length - 1] : null;
+    const paymentMethod = lastPayment ? lastPayment.method?.replace(/_/g, " ") : "Bank Transfer";
+
+    const statusMap: Record<string, string> = {
+        DRAFT: "pending",
+        ISSUED: "pending",
+        PARTIALLY_PAID: "processing",
+        PAID: "processed",
+        OVERDUE: "pending",
+        CANCELLED: "pending",
+    };
+
+    return {
+        id: inv._id || inv.id || "",
+        invoiceNo: inv.invoiceNo || "N/A",
+        partnerName: inv.customerName || inv.customerId?.name || "Unknown",
+        period,
+        amountDue: inv.grandTotal || 0,
+        amountPaid: inv.amountPaid || 0,
+        balanceDue: inv.balanceDue || 0,
+        status: statusMap[inv.status] || "pending",
+        dueDate: inv.dueDate || inv.invoiceDate || new Date().toISOString(),
+        paymentMethod,
+    };
+};
 
 const SettlementDashboard = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("all-status");
     const [isImportOpen, setIsImportOpen] = useState(false);
     const [isExportOpen, setIsExportOpen] = useState(false);
+    const [settlements, setSettlements] = useState<Settlement[]>([]);
+    const [stats, setStats] = useState<SettlementStat[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const filteredData = settlementData.filter((settlement) => {
-        const matchesSearch = settlement.partnerName.toLowerCase().includes(searchQuery.toLowerCase());
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem("token");
+            const headers = { Authorization: `Bearer ${token}` };
+            const [invoicesRes, statsRes] = await Promise.all([
+                axios.get(`${API_BASE}/api/invoices?limit=100`, { headers }),
+                axios.get(`${API_BASE}/api/invoices/stats`, { headers }),
+            ]);
+
+            const invoiceList = invoicesRes.data?.data || invoicesRes.data || [];
+            setSettlements(Array.isArray(invoiceList) ? invoiceList.map(mapInvoiceToSettlement) : []);
+
+            const s = statsRes.data || {};
+            const computedStats: SettlementStat[] = [
+                { title: "Pending Settlements", value: String((s.issued || 0) + (s.overdue || 0) + (s.partiallyPaid || 0)), change: "+8", trend: "down", icon: Clock, description: "Awaiting processing" },
+                { title: "Processed Today", value: String(s.paid || 0), change: "+6", trend: "up", icon: CheckCircle, description: "Completed" },
+                { title: "Total Amount", value: `₹${Number(s.totalBilled || 0).toLocaleString("en-IN")}`, change: "+12.5%", trend: "up", icon: IndianRupee, description: "Total billed" },
+                { title: "Outstanding", value: `₹${Number(s.totalOutstanding || 0).toLocaleString("en-IN")}`, change: "-0.3", trend: "up", icon: TrendingUp, description: "Balance due" },
+            ];
+            setStats(computedStats);
+        } catch (error) {
+            toast.error("Failed to load settlement data. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const filteredData = settlements.filter((settlement) => {
+        const matchesSearch = settlement.partnerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            settlement.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesStatus = statusFilter === "all-status" || settlement.status === statusFilter;
         return matchesSearch && matchesStatus;
     });
+
+    const formatCurrency = (val: number) => {
+        if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
+        if (val >= 1000) return `₹${(val / 1000).toFixed(0)}K`;
+        return `₹${val}`;
+    };
 
     return (
         <div className="space-y-7">
@@ -52,17 +135,17 @@ const SettlementDashboard = () => {
                         </div>
                         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                             <span className="flex items-center gap-2 rounded-full bg-muted/50 px-3 py-1">
-                                <IndianRupee className="h-3.5 w-3.5 text-primary" />₹45.8L pending
+                                <IndianRupee className="h-3.5 w-3.5 text-primary" />{stats[2]?.value || "₹0"} billed
                             </span>
                             <span className="flex items-center gap-2 rounded-full bg-muted/40 px-3 py-1">
-                                <BarChart3 className="h-3.5 w-3.5 text-success" />2.5 days avg
+                                <BarChart3 className="h-3.5 w-3.5 text-success" />{stats[0]?.value || 0} pending
                             </span>
                         </div>
                     </div>
                     <div className="flex flex-col gap-3">
                         <div className="flex gap-2">
-                            <Button className="gap-2 rounded-lg bg-primary text-primary-foreground shadow-brand">
-                                <CreditCard className="h-4 w-4" />Process Settlement
+                            <Button variant="outline" className="gap-2 rounded-lg border-border/70" onClick={fetchData} disabled={loading}>
+                                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Refresh
                             </Button>
                             <Button variant="outline" className="gap-2 rounded-lg border-border/70" onClick={() => setIsExportOpen(true)}>
                                 <Download className="h-4 w-4" />Export
@@ -76,7 +159,7 @@ const SettlementDashboard = () => {
             </section>
 
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                {settlementStats.map((stat, index) => (
+                {stats.map((stat, index) => (
                     <Card key={index} className="relative overflow-hidden rounded-2xl border-border/70 bg-card/95 shadow-card">
                         <CardContent className="p-6">
                             <div className="flex items-start justify-between">
@@ -137,6 +220,7 @@ const SettlementDashboard = () => {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-[250px]">Partner Name</TableHead>
+                                    <TableHead>Invoice No</TableHead>
                                     <TableHead>Period</TableHead>
                                     <TableHead>Amount Due</TableHead>
                                     <TableHead>Status</TableHead>
@@ -146,28 +230,31 @@ const SettlementDashboard = () => {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredData.length === 0 ? (
-                                    <TableRow><TableCell colSpan={7} className="h-24 text-center">No settlements found.</TableCell></TableRow>
+                                {loading ? (
+                                    <TableRow><TableCell colSpan={8} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" /></TableCell></TableRow>
+                                ) : filteredData.length === 0 ? (
+                                    <TableRow><TableCell colSpan={8} className="h-24 text-center">No settlements found.</TableCell></TableRow>
                                 ) : (
                                     filteredData.map((settlement) => (
                                         <TableRow key={settlement.id} className="group hover:bg-muted/20">
                                             <TableCell><p className="font-semibold text-foreground">{settlement.partnerName}</p></TableCell>
+                                            <TableCell><span className="text-sm font-mono">{settlement.invoiceNo}</span></TableCell>
                                             <TableCell><span className="text-sm">{settlement.period}</span></TableCell>
-                                            <TableCell><span className="font-semibold text-foreground">₹{(settlement.amountDue / 1000).toFixed(0)}K</span></TableCell>
+                                            <TableCell><span className="font-semibold text-foreground">{formatCurrency(settlement.amountDue)}</span></TableCell>
                                             <TableCell>
                                                 <Badge variant={settlement.status === "processed" ? "success" : settlement.status === "processing" ? "warning" : "secondary"} className="rounded-full">
                                                     {settlement.status === "processed" ? "Processed" : settlement.status === "processing" ? "Processing" : "Pending"}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell><span className="text-sm">{new Date(settlement.dueDate).toLocaleDateString("en-IN")}</span></TableCell>
-                                            <TableCell><span className="text-sm">{settlement.paymentMethod}</span></TableCell>
+                                            <TableCell><span className="text-sm capitalize">{settlement.paymentMethod.toLowerCase()}</span></TableCell>
                                             <TableCell>
                                                 <div className="flex justify-end">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="rounded-lg"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end" className="rounded-xl">
                                                             <DropdownMenuItem className="flex items-center gap-2 rounded-lg"><Eye className="h-4 w-4" />View Details</DropdownMenuItem>
-                                                            {settlement.status === "pending" && <DropdownMenuItem className="flex items-center gap-2 rounded-lg text-success"><CheckCircle className="h-4 w-4" />Process Payment</DropdownMenuItem>}
+                                                            {settlement.status === "pending" && <DropdownMenuItem className="flex items-center gap-2 rounded-lg text-success"><CreditCard className="h-4 w-4" />Process Payment</DropdownMenuItem>}
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </div>

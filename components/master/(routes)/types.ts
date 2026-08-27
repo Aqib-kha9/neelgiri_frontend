@@ -9,16 +9,22 @@ export interface RouteStop {
 }
 
 export interface Route {
+  _id?: string;
   id: string;
   code: string;
+  name?: string;
   sourceCity: string;
   destinationCity: string;
   sourceHub: string;
+  sourceHubName?: string;
   destinationHub: string;
-  
+  destinationHubName?: string;
+
   // Calculated Fields
   totalDistanceKm: number;
   totalTransitTimeHours: number;
+  finalLegDistanceKm?: number;
+  finalLegTransitTimeMins?: number;
   
   stops: RouteStop[]; // Intermediate hubs including Source (Seq 0) and Dest (Seq N)? No, usually intermediates. 
   // Let's keep Source and Dest separate in top fields, but stops array is usually intermediates. 
@@ -39,5 +45,6 @@ export interface Route {
 }
 
 export interface RouteFormData extends Omit<Route, 'id' | 'totalDistanceKm' | 'totalTransitTimeHours'> {
-    // calculated fields not needed in form
+  finalLegDistanceKm: number;
+  finalLegTransitTimeMins: number;
 }

@@ -1,7 +1,12 @@
 import { Hash, Download, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const HeaderSection = () => {
+interface HeaderSectionProps {
+  onCreate: () => void;
+  onExport: () => void;
+}
+
+const HeaderSection = ({ onCreate, onExport }: HeaderSectionProps) => {
   return (
     <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
       <div className="space-y-2">
@@ -20,11 +25,18 @@ const HeaderSection = () => {
         </div>
       </div>
       <div className="flex items-center gap-3">
-        <Button variant="outline" className="gap-2 rounded-xl border-border/70">
+        <Button
+          variant="outline"
+          className="gap-2 rounded-xl border-border/70"
+          onClick={onExport}
+        >
           <Download className="h-4 w-4" />
           Export Report
         </Button>
-        <Button className="gap-2 rounded-xl bg-primary text-primary-foreground shadow-brand">
+        <Button
+          className="gap-2 rounded-xl bg-primary text-primary-foreground shadow-brand"
+          onClick={onCreate}
+        >
           <Plus className="h-4 w-4" />
           New AWB Series
         </Button>

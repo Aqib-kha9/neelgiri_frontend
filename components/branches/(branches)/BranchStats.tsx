@@ -1,9 +1,7 @@
 import { Building, Activity, Shield, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { branchesData } from "./data/mockData";
-
-type Branch = typeof branchesData[0];
+import type { Branch } from "./types";
 
 interface BranchStatsProps {
     branches: Branch[];

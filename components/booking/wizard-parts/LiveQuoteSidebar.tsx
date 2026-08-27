@@ -13,92 +13,100 @@ interface LiveQuoteSidebarProps {
 }
 
 export function LiveQuoteSidebar({ pricing, formData, session, isPricingLoading }: LiveQuoteSidebarProps) {
+    const money = (value: number) => value.toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    });
+
     return (
-        <Card className="h-full flex flex-col relative">
-            {/* Loading Overlay */}
+        <Card className="relative flex h-full flex-col overflow-hidden rounded-2xl border-border/70 shadow-sm">
             {isPricingLoading && (
-                <div className="absolute inset-0 bg-background/50 backdrop-blur-[2px] flex items-center justify-center z-50">
-                    <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
             )}
 
-            {/* Header */}
-            <div className="p-6 border-b space-y-2">
-                <div className="flex items-center justify-between">
-                    <h3 className="font-semibold flex items-center gap-2">
-                        <Receipt className="h-4 w-4 text-muted-foreground" /> Booking Summary
+            <div className="space-y-3 border-b bg-muted/20 p-4 sm:p-5">
+                <div className="flex items-center justify-between gap-3">
+                    <h3 className="flex items-center gap-2 font-semibold">
+                        <Receipt className="h-4 w-4 text-primary" /> Live quote
                     </h3>
+                    <Badge variant="outline" className="text-[10px] font-normal">
+                        Estimate
+                    </Badge>
                 </div>
-                <div className="pt-2">
-                    <p className="text-sm text-muted-foreground">Route</p>
-                    <p className="text-base font-medium truncate">{formData.senderCity || 'Origin'} → {formData.receiverCity || 'Destination'}</p>
+                <div className="rounded-xl border bg-background p-3">
+                    <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Route</p>
+                    <p className="mt-1 truncate text-sm font-semibold">
+                        {formData.senderCity || 'Pickup location'}
+                        <span className="px-1 text-muted-foreground">→</span>
+                        {formData.receiverCity || 'Delivery location'}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                        {formData.mode === 'AIR' ? 'Air service' : 'Surface service'}
+                        {' · '}{pricing.chargeableWeight.toFixed(1)} kg chargeable
+                    </p>
                 </div>
             </div>
 
-            {/* Price Breakdown */}
-            <div className="flex-1 p-6 space-y-5">
-                <div className="space-y-4">
-                    <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Base Freight</span>
-                        <span className="font-medium">₹{pricing.baseFreight.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <div className="flex-1 space-y-5 p-4 sm:p-5">
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Base freight</span>
+                        <span className="font-medium">₹{money(pricing.baseFreight)}</span>
                     </div>
-                    
-                    <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Fuel Surcharge</span>
-                        <span className="font-medium">₹{pricing.fuelSurcharge.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Fuel surcharge</span>
+                        <span className="font-medium">₹{money(pricing.fuelSurcharge)}</span>
                     </div>
-
                     {pricing.odaSurcharge > 0 && (
-                        <div className="flex justify-between items-center text-sm text-amber-600">
-                            <span>ODA Surcharge</span>
-                            <span className="font-medium">₹{pricing.odaSurcharge.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <div className="flex items-center justify-between text-sm text-amber-600">
+                            <span>ODA surcharge</span>
+                            <span className="font-medium">₹{money(pricing.odaSurcharge)}</span>
                         </div>
                     )}
-
                     {pricing.codCharge > 0 && (
-                        <div className="flex justify-between items-center text-sm">
-                            <span className="text-muted-foreground">COD Charge</span>
-                            <span className="font-medium">₹{pricing.codCharge.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">COD charge</span>
+                            <span className="font-medium">₹{money(pricing.codCharge)}</span>
                         </div>
                     )}
-
-                    <div className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground">Transit Insurance</span>
-                        <span className="font-medium">₹{pricing.insuranceAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Transit insurance</span>
+                        <span className="font-medium">₹{money(pricing.insuranceAmount)}</span>
                     </div>
-
-                    <div className="flex justify-between items-center text-sm">
+                    <div className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">GST ({pricing.gstRate}%)</span>
-                        <span className="font-medium">₹{pricing.taxAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="font-medium">₹{money(pricing.taxAmount)}</span>
                     </div>
                 </div>
 
                 <Separator />
 
-                <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Total Amount</p>
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                    <p className="text-sm text-muted-foreground">Estimated total</p>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-3xl font-semibold tracking-tight text-foreground">
-                            ₹{pricing.netAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                        <span className="text-xs text-muted-foreground">Inc. Tax</span>
+                        <span className="text-3xl font-semibold tracking-tight text-foreground">₹{money(pricing.netAmount)}</span>
+                        <span className="text-xs text-muted-foreground">Inc. tax</span>
                     </div>
                 </div>
-            </div>
 
-            {/* Footer Metrics */}
-            <div className="p-6 bg-muted/20 border-t space-y-4">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <p className="text-xs text-muted-foreground mb-1">Billing Type</p>
+                <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border bg-muted/20 p-3">
+                        <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Billing type</p>
                         <Badge variant="secondary" className="font-normal">
                             {session?.user?.billingType || 'Unknown'}
                         </Badge>
                     </div>
-                    <div className="text-right">
-                        <p className="text-xs text-muted-foreground mb-1">Chargeable Weight</p>
-                        <p className="text-base font-medium">{pricing.chargeableWeight.toFixed(1)} KG</p>
+                    <div className="rounded-lg border bg-muted/20 p-3 text-right">
+                        <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Chargeable weight</p>
+                        <p className="text-sm font-semibold">{pricing.chargeableWeight.toFixed(1)} kg</p>
                     </div>
+                </div>
+
+                <div className="flex items-start gap-2 rounded-lg border border-dashed bg-background/60 p-3 text-xs text-muted-foreground">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                    Final charges are confirmed before the shipment is booked.
                 </div>
             </div>
         </Card>

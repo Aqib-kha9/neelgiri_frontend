@@ -1,4 +1,5 @@
 export interface InventoryItem {
+    _id?: string;
     id: string;
     name: string;
     sku: string;
@@ -12,6 +13,26 @@ export interface InventoryItem {
     lastUpdated: string;
     supplier: string;
     location: string;
+    // Backend fields
+    skuCode?: string;
+    quantity?: number;
+    reorderLevel?: number;
+    maxLevel?: number;
+    unit?: string;
+    unitCost?: number;
+    warehouseId?: string;
+    warehouseName?: string;
+    storageLocation?: string;
+    description?: string;
+}
+
+export interface InventoryStatsResponse {
+    total: number;
+    inStock: number;
+    lowStock: number;
+    outOfStock: number;
+    discontinued: number;
+    totalValue: number;
 }
 
 export interface InventoryStat {

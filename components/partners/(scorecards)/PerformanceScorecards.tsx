@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
+import axios from "axios";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,35 +10,107 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Award, TrendingUp, AlertTriangle, CheckCircle, BarChart3, Search, X, MoreHorizontal, Eye, FileText, Download, Upload, TrendingDown } from "lucide-react";
+import { Award, TrendingUp, AlertTriangle, CheckCircle, BarChart3, Search, X, MoreHorizontal, Eye, FileText, Download, Upload, TrendingDown, Loader2, RefreshCw } from "lucide-react";
 import { ImportDialog } from "../../warehouse/(inventory)/ImportDialog";
 import { ExportDialog } from "../../warehouse/(inventory)/ExportDialog";
 
-const scorecardStats = [
-    { title: "Avg Performance Score", value: "89.5", change: "+2.3", trend: "up", icon: Award, description: "Network average" },
-    { title: "Top Performers", value: "42", change: "+5", trend: "up", icon: TrendingUp, description: "Score ≥ 90" },
-    { title: "Needs Improvement", value: "15", change: "-3", trend: "up", icon: AlertTriangle, description: "Score < 75" },
-    { title: "Compliance Rate", value: "96.2%", change: "+1.5%", trend: "up", icon: CheckCircle, description: "Meeting SLAs" },
-];
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 
-const scorecardData = [
-    { id: "SC-001", partnerName: "Spice Garden Restaurant", overallScore: 94, deliveryScore: 96, qualityScore: 92, customerRating: 4.7, trend: "up", status: "excellent" },
-    { id: "SC-002", partnerName: "FreshMart Grocery", overallScore: 88, deliveryScore: 85, qualityScore: 90, customerRating: 4.5, trend: "neutral", status: "good" },
-    { id: "SC-003", partnerName: "HealthPlus Pharmacy", overallScore: 96, deliveryScore: 98, qualityScore: 95, customerRating: 4.9, trend: "up", status: "excellent" },
-    { id: "SC-004", partnerName: "Burger King Express", overallScore: 92, deliveryScore: 90, qualityScore: 93, customerRating: 4.6, trend: "up", status: "excellent" },
-    { id: "SC-005", partnerName: "Daily Needs Store", overallScore: 65, deliveryScore: 60, qualityScore: 70, customerRating: 3.8, trend: "down", status: "poor" },
-    { id: "SC-006", partnerName: "MediCare Plus", overallScore: 91, deliveryScore: 89, qualityScore: 92, customerRating: 4.7, trend: "up", status: "excellent" },
-    { id: "SC-007", partnerName: "Pizza Paradise", overallScore: 89, deliveryScore: 87, qualityScore: 90, customerRating: 4.4, trend: "neutral", status: "good" },
-];
+interface Scorecard {
+    id: string;
+    partnerCode: string;
+    partnerName: string;
+    overallScore: number;
+    deliveryScore: number;
+    qualityScore: number;
+    customerRating: number;
+    trend: "up" | "down" | "neutral";
+    status: "excellent" | "good" | "poor";
+}
+
+interface ScorecardStat {
+    title: string;
+    value: string;
+    change: string;
+    trend: "up" | "down";
+    icon: any;
+    description: string;
+}
+
+const mapPartnerToScorecard = (p: any): Scorecard => {
+    const rating = p.metrics?.rating ?? p.avgRating ?? 0;
+    const totalShipments = p.metrics?.totalShipments ?? 0;
+    const delivered = p.metrics?.deliveredShipments ?? 0;
+    const deliveryRate = totalShipments > 0 ? Math.round((delivered / totalShipments) * 100) : 0;
+    const overallScore = Math.round(rating * 20);
+    const qualityScore = Math.min(100, Math.round(deliveryRate * 0.9 + rating * 2));
+
+    let status: Scorecard["status"] = "poor";
+    if (overallScore >= 90) status = "excellent";
+    else if (overallScore >= 75) status = "good";
+
+    return {
+        id: p._id || p.id || "",
+        partnerCode: p.partnerCode || "N/A",
+        partnerName: p.companyName || p.name || "Unknown Partner",
+        overallScore,
+        deliveryScore: deliveryRate,
+        qualityScore,
+        customerRating: Math.round(rating * 10) / 10,
+        trend: overallScore >= 80 ? "up" : overallScore < 60 ? "down" : "neutral",
+        status,
+    };
+};
 
 const PerformanceScorecards = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [scoreFilter, setScoreFilter] = useState("all-scores");
     const [isImportOpen, setIsImportOpen] = useState(false);
     const [isExportOpen, setIsExportOpen] = useState(false);
+    const [scorecards, setScorecards] = useState<Scorecard[]>([]);
+    const [stats, setStats] = useState<ScorecardStat[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const filteredData = scorecardData.filter((sc) => {
-        const matchesSearch = sc.partnerName.toLowerCase().includes(searchQuery.toLowerCase());
+    const fetchData = useCallback(async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem("token");
+            const headers = { Authorization: `Bearer ${token}` };
+            const [partnersRes, statsRes] = await Promise.all([
+                axios.get(`${API_BASE}/api/partners`, { headers }),
+                axios.get(`${API_BASE}/api/partners/stats`, { headers }),
+            ]);
+
+            const partnerList = Array.isArray(partnersRes.data) ? partnersRes.data : [];
+            const mapped = partnerList.map(mapPartnerToScorecard);
+            setScorecards(mapped);
+
+            const s = statsRes.data || {};
+            const avgScore = mapped.length > 0 ? (mapped.reduce((sum, sc) => sum + sc.overallScore, 0) / mapped.length).toFixed(1) : "0";
+            const topPerformers = mapped.filter((sc) => sc.overallScore >= 90).length;
+            const needsImprovement = mapped.filter((sc) => sc.overallScore < 75).length;
+            const complianceRate = mapped.length > 0 ? ((mapped.filter((sc) => sc.overallScore >= 75).length / mapped.length) * 100).toFixed(1) : "0";
+
+            setStats([
+                { title: "Avg Performance Score", value: String(avgScore), change: "+2.3", trend: "up", icon: Award, description: "Network average" },
+                { title: "Top Performers", value: String(topPerformers), change: "+5", trend: "up", icon: TrendingUp, description: "Score ≥ 90" },
+                { title: "Needs Improvement", value: String(needsImprovement), change: "-3", trend: "up", icon: AlertTriangle, description: "Score < 75" },
+                { title: "Compliance Rate", value: `${complianceRate}%`, change: "+1.5%", trend: "up", icon: CheckCircle, description: "Meeting SLAs" },
+            ]);
+        } catch (error) {
+            toast.error("Failed to load performance scorecards. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const filteredData = scorecards.filter((sc) => {
+        const matchesSearch = sc.partnerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            sc.partnerCode.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesScore = scoreFilter === "all-scores" ||
             (scoreFilter === "excellent" && sc.overallScore >= 90) ||
             (scoreFilter === "good" && sc.overallScore >= 75 && sc.overallScore < 90) ||
@@ -56,15 +130,18 @@ const PerformanceScorecards = () => {
                         </div>
                         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                             <span className="flex items-center gap-2 rounded-full bg-muted/50 px-3 py-1">
-                                <Award className="h-3.5 w-3.5 text-primary" />89.5 avg score
+                                <Award className="h-3.5 w-3.5 text-primary" />{stats[0]?.value || "0"} avg score
                             </span>
                             <span className="flex items-center gap-2 rounded-full bg-muted/40 px-3 py-1">
-                                <BarChart3 className="h-3.5 w-3.5 text-success" />96.2% compliance
+                                <BarChart3 className="h-3.5 w-3.5 text-success" />{stats[3]?.value || "0%"} compliance
                             </span>
                         </div>
                     </div>
                     <div className="flex flex-col gap-3">
                         <div className="flex gap-2">
+                            <Button variant="outline" className="gap-2 rounded-lg border-border/70" onClick={fetchData} disabled={loading}>
+                                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Refresh
+                            </Button>
                             <Button variant="outline" className="gap-2 rounded-lg border-border/70" onClick={() => setIsExportOpen(true)}>
                                 <Download className="h-4 w-4" />Export Report
                             </Button>
@@ -77,7 +154,7 @@ const PerformanceScorecards = () => {
             </section>
 
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                {scorecardStats.map((stat, index) => (
+                {stats.map((stat, index) => (
                     <Card key={index} className="relative overflow-hidden rounded-2xl border-border/70 bg-card/95 shadow-card">
                         <CardContent className="p-6">
                             <div className="flex items-start justify-between">
@@ -115,7 +192,7 @@ const PerformanceScorecards = () => {
                                 <SelectItem value="all-scores">All Scores</SelectItem>
                                 <SelectItem value="excellent">Excellent (≥90)</SelectItem>
                                 <SelectItem value="good">Good (75-89)</SelectItem>
-                                <SelectItem value="poor">Poor (&lt;75)</SelectItem>
+                                <SelectItem value="poor">Poor (Below 75)</SelectItem>
                             </SelectContent>
                         </Select>
                         {(searchQuery || scoreFilter !== "all-scores") && (
@@ -147,12 +224,19 @@ const PerformanceScorecards = () => {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredData.length === 0 ? (
+                                {loading ? (
+                                    <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" /></TableCell></TableRow>
+                                ) : filteredData.length === 0 ? (
                                     <TableRow><TableCell colSpan={7} className="h-24 text-center">No scorecards found.</TableCell></TableRow>
                                 ) : (
                                     filteredData.map((sc) => (
                                         <TableRow key={sc.id} className="group hover:bg-muted/20">
-                                            <TableCell><p className="font-semibold text-foreground">{sc.partnerName}</p></TableCell>
+                                            <TableCell>
+                                                <div className="space-y-1">
+                                                    <p className="font-semibold text-foreground">{sc.partnerName}</p>
+                                                    <p className="text-xs text-muted-foreground">{sc.partnerCode}</p>
+                                                </div>
+                                            </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
                                                     <div className="flex-1 h-2 w-24 overflow-hidden rounded-full bg-muted/40">

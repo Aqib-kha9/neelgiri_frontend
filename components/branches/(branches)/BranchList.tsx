@@ -1,12 +1,11 @@
 import { BranchTable } from "./BranchTable";
-import { branchesData } from "./data/mockData";
-
-type Branch = typeof branchesData[0];
+import type { Branch } from "./types";
 
 interface BranchListProps {
   branches: Branch[];
   onEditBranch: (branch: Branch) => void;
-  onDeleteBranch: (branchId: string) => void;
+  onDeactivateBranch: (branchId: string) => void;
+  onPermanentDelete: (branchId: string) => Promise<boolean>;
 }
 
 export const BranchList = (props: BranchListProps) => {

@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Pincode } from "./types";
+import { OperationalLocation, Pincode } from "./types";
 import {
   MapPin,
   Globe,
@@ -56,6 +56,7 @@ const defaultForm = {
   state: "",
   zone: "OTHER",
   branchId: "",
+  locationId: "",
   isServiceable: false,
   isODA: false,
   isMetro: false,
@@ -67,7 +68,9 @@ const defaultForm = {
 const PincodeForm = ({ open, onOpenChange, onSave, pincode }: PincodeFormProps) => {
   const [formData, setFormData] = useState(defaultForm);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [serviceLocations, setServiceLocations] = useState<OperationalLocation[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
+  const [loadingLocations, setLoadingLocations] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Fetch branches for dropdown
@@ -89,6 +92,31 @@ const PincodeForm = ({ open, onOpenChange, onSave, pincode }: PincodeFormProps) 
     if (open) fetchBranches();
   }, [open]);
 
+  // Only customer-facing operational facilities may own serviceable pincodes.
+  useEffect(() => {
+    const fetchServiceLocations = async () => {
+      setLoadingLocations(true);
+      try {
+        const token = localStorage.getItem("token");
+        const { data } = await axios.get("/api/locations", {
+          params: { status: "ACTIVE" },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const list = Array.isArray(data) ? data : data.locations || [];
+        setServiceLocations(
+          list.filter((location: OperationalLocation) =>
+            ["BRANCH", "DELIVERY_CENTER", "PICKUP_POINT"].includes(location.type)
+          )
+        );
+      } catch {
+        toast.error("Could not load operational locations");
+      } finally {
+        setLoadingLocations(false);
+      }
+    };
+    if (open) fetchServiceLocations();
+  }, [open]);
+
   // Populate form when editing
   useEffect(() => {
     if (pincode) {
@@ -99,6 +127,7 @@ const PincodeForm = ({ open, onOpenChange, onSave, pincode }: PincodeFormProps) 
         state: pincode.state || "",
         zone: pincode.zone || "OTHER",
         branchId: pincode.branchId?._id || "",
+        locationId: pincode.locationId?._id || "",
         isServiceable: pincode.isServiceable ?? false,
         isODA: pincode.isODA ?? false,
         isMetro: pincode.isMetro ?? false,
@@ -141,6 +170,7 @@ const PincodeForm = ({ open, onOpenChange, onSave, pincode }: PincodeFormProps) 
         isMetro: formData.isMetro,
         transitDays: Number(formData.transitDays) || 3,
         branchId: formData.branchId || null,
+        locationId: formData.locationId || null,
         latitude: formData.latitude !== "" ? parseFloat(formData.latitude as string) : null,
         longitude: formData.longitude !== "" ? parseFloat(formData.longitude as string) : null,
       };
@@ -281,10 +311,10 @@ const PincodeForm = ({ open, onOpenChange, onSave, pincode }: PincodeFormProps) 
 
             <Separator />
 
-            {/* ── Branch Mapping ────────────────────────────────── */}
-            <div className="space-y-3">
+            {/* ── Commercial and operational mappings ───────────── */}
+            <div className="space-y-4">
               <h4 className="text-sm font-semibold flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-primary" /> Branch Mapping
+                <Building2 className="h-4 w-4 text-primary" /> Network Responsibility
               </h4>
               <div className="space-y-2">
                 <Label htmlFor="branchId">Controlling Branch</Label>
@@ -311,7 +341,36 @@ const PincodeForm = ({ open, onOpenChange, onSave, pincode }: PincodeFormProps) 
                   </Select>
                 )}
                 <p className="text-[10px] text-muted-foreground">
-                  The branch responsible for pickups &amp; deliveries at this pincode.
+                  Commercial owner used by the existing branch claim and release workflow.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="locationId">Operational Facility</Label>
+                {loadingLocations ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground border rounded-lg px-3 py-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading operational locations...
+                  </div>
+                ) : (
+                  <Select
+                    value={formData.locationId || "__none__"}
+                    onValueChange={(val) => handleChange("locationId", val === "__none__" ? "" : val)}
+                  >
+                    <SelectTrigger id="locationId">
+                      <SelectValue placeholder="Select facility (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Not Mapped —</SelectItem>
+                      {serviceLocations.map((location) => (
+                        <SelectItem key={location._id} value={location._id}>
+                          {location.name} ({location.code}) · {location.type.replaceAll("_", " ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <p className="text-[10px] text-muted-foreground">
+                  Physical Branch, Delivery Centre, or Pickup Point that executes pickup and delivery service.
                 </p>
               </div>
             </div>
