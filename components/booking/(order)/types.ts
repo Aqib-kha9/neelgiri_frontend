@@ -32,6 +32,8 @@ export interface Order {
   package: PackageDetails;
   service: ServiceDetails;
   status:
+    | "not_scheduled"
+    | "draft"
     | "booked"
     | "in-transit"
     | "out-for-delivery"

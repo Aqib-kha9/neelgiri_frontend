@@ -142,16 +142,18 @@ const PickupRequests = () => {
     };
 
     const handleStart = async (id: string) => {
+        if (!window.confirm("Are you sure you want to start this pickup run?")) return;
         try {
             await pickupApi.startPickup(id);
             toast.success("Pickup run started");
             fetchPickups();
         } catch (error: any) {
-            toast.error(error.message || "Failed to start pickup");
+            toast.error(error.message || "Failed to start pickup run");
         }
     };
 
     const handleComplete = async (id: string) => {
+        if (!window.confirm("Are you sure you want to complete this pickup? Ensure all parcels are either scanned or marked as missed.")) return;
         try {
             await pickupApi.complete(id);
             toast.success("Pickup completed");
@@ -162,7 +164,8 @@ const PickupRequests = () => {
     };
 
     const handleCancel = async (id: string) => {
-        const reason = window.prompt("Enter cancellation reason:") || "Cancelled by user";
+        const reason = window.prompt("Enter cancellation reason:");
+        if (reason === null) return;
         try {
             await pickupApi.cancel(id, reason);
             toast.success("Pickup cancelled");
@@ -404,9 +407,9 @@ const PickupRequests = () => {
                                                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="rounded-lg"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end" className="rounded-xl">
                                                             <DropdownMenuItem className="flex items-center gap-2 rounded-lg" onClick={() => openDetails(pickup)}><Eye className="h-4 w-4" />View Details</DropdownMenuItem>
-                                                            {canAssign && pickup.status === "requested" && (
+                                                            {canAssign && (pickup.status === "requested" || pickup.status === "assigned") && (
                                                                 <DropdownMenuItem className="flex items-center gap-2 rounded-lg" onClick={() => setAssigningPickupId(pickup._id)}>
-                                                                    <User className="h-4 w-4" />Assign Rider
+                                                                    <User className="h-4 w-4" />{pickup.status === "requested" ? "Assign Rider" : "Reassign Rider"}
                                                                 </DropdownMenuItem>
                                                             )}
                                                             {canExecute(pickup) && pickup.status === "assigned" && (
@@ -500,7 +503,7 @@ const PickupRequests = () => {
                                                     <Badge variant={shipment.scanStatus === "scanned" ? "success" : shipment.scanStatus === "missed" ? "error" : "secondary"}>
                                                         {shipment.scanStatus === "scanned" ? "Scanned" : shipment.scanStatus === "missed" ? "Missed" : shipment.scanStatus === "rejected" ? "Rejected" : "Pending"}
                                                     </Badge>
-                                                    {canExecute(selectedPickup) && ["assigned", "pickup_started"].includes(selectedPickup.status) && shipment.scanStatus === "pending" && shipment.awb && (
+                                                    {canExecute(selectedPickup) && selectedPickup.status === "pickup_started" && shipment.scanStatus === "pending" && shipment.awb && (
                                                         <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleMarkMissed(shipment.awb as string)} disabled={parcelActionLoading} title="Mark parcel missed">
                                                             <CircleAlert className="h-4 w-4" />
                                                         </Button>
@@ -510,7 +513,7 @@ const PickupRequests = () => {
                                         ))}
                                     </div>
                                 )}
-                                {canExecute(selectedPickup) && ["assigned", "pickup_started"].includes(selectedPickup.status) && (
+                                {canExecute(selectedPickup) && selectedPickup.status === "pickup_started" && (
                                     <div className="flex gap-2">
                                         <Input
                                             value={scanAwb}

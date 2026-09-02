@@ -6,7 +6,11 @@ interface StatusBadgeProps {
 }
 
 const StatusBadge = ({ status }: StatusBadgeProps) => {
-  const config = statusConfig[status];
+  const config = statusConfig[status as keyof typeof statusConfig] || {
+    label: status?.replace(/_/g, " ") || "Unknown",
+    color: "bg-gray-100 text-gray-800 border-gray-200",
+    icon: () => null,
+  };
   const IconComponent = config.icon;
 
   return (

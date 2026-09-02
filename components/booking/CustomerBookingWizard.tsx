@@ -496,7 +496,7 @@ export default function CustomerBookingWizard() {
                         </div>
 
                         <div className="flex flex-col gap-3 sm:flex-row">
-                            <Button className="w-full gap-2" onClick={() => router.push(`/dashboard/tracking?awb=${bookingSuccess}`)}>
+                            <Button className="w-full gap-2" onClick={() => router.push(`/dashboard/tracking/portal`)}>
                                 <ChevronRight className="h-4 w-4" />
                                 Track shipment
                             </Button>

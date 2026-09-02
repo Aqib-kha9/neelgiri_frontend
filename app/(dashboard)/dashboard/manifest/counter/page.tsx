@@ -256,7 +256,7 @@ export default function CounterManifestPage() {
                 }
             };
 
-            const res = await fetch('/api/manifests/create', {
+            const res = await fetch('/api/manifests', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

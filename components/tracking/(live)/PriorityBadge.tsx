@@ -6,7 +6,10 @@ interface PriorityBadgeProps {
 }
 
 const PriorityBadge = ({ priority }: PriorityBadgeProps) => {
-  const config = priorityConfig[priority];
+  const config = priorityConfig[priority as keyof typeof priorityConfig] || {
+    label: priority || "Unknown",
+    color: "bg-gray-100 text-gray-800 border-gray-200",
+  };
 
   return (
     <Badge className={`rounded-full border ${config.color} px-2 py-1 text-xs`}>

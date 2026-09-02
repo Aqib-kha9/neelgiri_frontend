@@ -252,8 +252,28 @@ export default function ManifestForwardingHistoryPage() {
                   }
 
                   // Status Badge Logic
-                  const statusLabel = m.status === 'in_transit' ? 'In Transit' : 'Received';
-                  const badgeClass = m.status === 'in_transit' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-green-600 hover:bg-green-700';
+                  const getStatusLabel = (status: string) => {
+                    if (status === 'open') return 'Open';
+                    if (status === 'closed') return 'Closed';
+                    if (status === 'vehicle_assigned') return 'Vehicle Assigned';
+                    if (status === 'in_transit') return 'In Transit';
+                    if (status === 'delayed') return 'Delayed';
+                    if (status === 'arrived') return 'Arrived';
+                    if (status === 'received') return 'Received';
+                    if (status === 'complete') return 'Complete';
+                    if (status === 'cancelled') return 'Cancelled';
+                    return status;
+                  };
+
+                  const getBadgeClass = (status: string) => {
+                    if (status === 'open' || status === 'closed') return 'bg-blue-500 hover:bg-blue-600';
+                    if (status === 'in_transit' || status === 'vehicle_assigned') return 'bg-amber-500 hover:bg-amber-600';
+                    if (status === 'delayed' || status === 'cancelled') return 'bg-red-500 hover:bg-red-600';
+                    return 'bg-green-600 hover:bg-green-700';
+                  };
+
+                  const statusLabel = getStatusLabel(m.status);
+                  const badgeClass = getBadgeClass(m.status);
                   const isExpanded = expandedManifestId === m._id;
 
                   return (

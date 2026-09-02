@@ -17,6 +17,13 @@ import { Loader2 } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:5000";
 
+const formatDate = (dateString: any) => {
+  if (!dateString) return "—";
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-GB").replace(",", "");
+};
+
 const mapShipmentToTracking = (shipment: any, trackingData?: any) => {
   const history = shipment.history || [];
   const milestones = history.map((h: any, idx: number) => ({
@@ -24,7 +31,7 @@ const mapShipmentToTracking = (shipment: any, trackingData?: any) => {
     status: idx < history.length - 1 ? "completed" : "current",
     title: h.status?.replace(/_/g, " ")?.replace(/\b\w/g, (c: string) => c.toUpperCase()) || "Status Update",
     location: h.remark || "",
-    timestamp: h.timestamp ? new Date(h.timestamp).toLocaleString("en-GB").replace(",", "") : "",
+    timestamp: formatDate(h.timestamp),
     description: h.remark || "",
   }));
 
@@ -35,7 +42,7 @@ const mapShipmentToTracking = (shipment: any, trackingData?: any) => {
     awbNumber: shipment.awb,
     status: shipment.status || "not_scheduled",
     currentStatus: shipment.status?.replace(/_/g, " ")?.replace(/\b\w/g, (c: string) => c.toUpperCase()) || "Unknown",
-    priority: shipment.paymentMode === "cod" ? "high" : "normal",
+    priority: shipment.paymentMode === "cod" ? "high" : "medium",
     sender: {
       name: shipment.sender?.name || "—",
       phone: shipment.sender?.phone || "—",
@@ -69,9 +76,7 @@ const mapShipmentToTracking = (shipment: any, trackingData?: any) => {
             latitude: currentLocation.latitude,
             longitude: currentLocation.longitude,
             address: currentLocation.address || "—",
-            timestamp: currentLocation.updatedAt
-              ? new Date(currentLocation.updatedAt).toLocaleString("en-GB").replace(",", "")
-              : "",
+            timestamp: formatDate(currentLocation.updatedAt),
             speed: currentLocation.speed ? `${currentLocation.speed} km/h` : "—",
           }
         : null,
@@ -83,13 +88,9 @@ const mapShipmentToTracking = (shipment: any, trackingData?: any) => {
         distanceRemaining: "—",
       },
       eta: {
-        predicted: shipment.deliveredAt
-          ? new Date(shipment.deliveredAt).toLocaleString("en-GB").replace(",", "")
-          : "—",
+        predicted: formatDate(shipment.deliveredAt),
         confidence: "medium",
-        updatedAt: shipment.updatedAt
-          ? new Date(shipment.updatedAt).toLocaleString("en-GB").replace(",", "")
-          : "",
+        updatedAt: formatDate(shipment.updatedAt),
       },
       carrier: trackingData?.rider
         ? {
@@ -105,9 +106,7 @@ const mapShipmentToTracking = (shipment: any, trackingData?: any) => {
           status: "current",
           title: "Shipment Created",
           location: shipment.sender?.city || "—",
-          timestamp: shipment.createdAt
-            ? new Date(shipment.createdAt).toLocaleString("en-GB").replace(",", "")
-            : "",
+          timestamp: formatDate(shipment.createdAt),
           description: "Shipment booked",
         },
       ],

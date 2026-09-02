@@ -15,17 +15,17 @@ const MapPlaceholder = ({ location }: MapPlaceholderProps) => {
             <p className="text-sm font-medium text-foreground">
               Current Location
             </p>
-            <p className="text-xs text-muted-foreground">{location.address}</p>
+            <p className="text-xs text-muted-foreground">{location?.address || "Location unavailable"}</p>
           </div>
         </div>
       </div>
       <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white/90 backdrop-blur-sm rounded-lg p-3 shadow-lg">
         <div className="text-center">
           <p className="text-sm font-medium text-foreground">
-            Live Tracking Active
+            {location ? "Live Tracking Active" : "Tracking Unavailable"}
           </p>
           <p className="text-xs text-muted-foreground">
-            Updated {location.timestamp}
+            {location?.timestamp ? `Updated ${location.timestamp}` : "Offline"}
           </p>
         </div>
       </div>

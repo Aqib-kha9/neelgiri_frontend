@@ -47,6 +47,7 @@ const TripsManagement = () => {
     const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
     const [isReassignOpen, setIsReassignOpen] = useState(false);
     const [isTransferOpen, setIsTransferOpen] = useState(false);
+    const [isDetailsOpen, setIsDetailsOpen] = useState(false);
     const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
 
@@ -57,7 +58,7 @@ const TripsManagement = () => {
                 tripApi.list({ page: 1, limit: 100 }),
                 tripApi.stats().catch(() => ({ total: 0, active: 0, completed: 0, breakdown: 0 })),
             ]);
-            setTrips(listRes.data || []);
+            setTrips((listRes as any).trips || (listRes as any).data || []);
             setStats(statsRes);
         } catch (error) {
             console.error("Failed to fetch trips:", error);
@@ -82,6 +83,10 @@ const TripsManagement = () => {
                 case "depart":
                     await tripApi.depart(trip._id);
                     toast.success("Trip departed");
+                    break;
+                case "in-transit":
+                    await tripApi.markInTransit(trip._id);
+                    toast.success("Trip marked in transit");
                     break;
                 case "arrive":
                     await tripApi.arrive(trip._id);
@@ -241,7 +246,7 @@ const TripsManagement = () => {
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
                                                     <Truck className="h-4 w-4 text-muted-foreground" />
-                                                    <span className="text-sm font-medium">{trip.vehicleNumber || trip.vehicle?.vehicleNumber || "—"}</span>
+                                                    <span className="text-sm font-medium">{trip.vehicle?.vehicleNumber || trip.vehicleNumber || "—"}</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell><Badge variant="outline">{trip.manifests?.length || 0}</Badge></TableCell>
@@ -256,7 +261,9 @@ const TripsManagement = () => {
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="rounded-lg"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end" className="rounded-xl">
-                                                            <DropdownMenuItem className="flex items-center gap-2 rounded-lg"><Eye className="h-4 w-4" />View Details</DropdownMenuItem>
+                                                            <DropdownMenuItem className="flex items-center gap-2 rounded-lg" onClick={() => { setSelectedTrip(trip); setIsDetailsOpen(true); }}>
+                                                                <Eye className="h-4 w-4" />View Details
+                                                            </DropdownMenuItem>
                                                             {trip.status === "planned" && (
                                                                 <DropdownMenuItem className="flex items-center gap-2 rounded-lg" onClick={() => handleAction("start-loading", trip)}>
                                                                     <Package className="h-4 w-4" />Start Loading
@@ -267,7 +274,12 @@ const TripsManagement = () => {
                                                                     <Play className="h-4 w-4" />Depart
                                                                 </DropdownMenuItem>
                                                             )}
-                                                            {trip.status === "in_transit" && (
+                                                            {trip.status === "departed" && (
+                                                                <DropdownMenuItem className="flex items-center gap-2 rounded-lg" onClick={() => handleAction("in-transit", trip)}>
+                                                                    <Truck className="h-4 w-4" />Mark In Transit
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            {(trip.status === "in_transit" || trip.status === "departed") && (
                                                                 <DropdownMenuItem className="flex items-center gap-2 rounded-lg" onClick={() => handleAction("arrive", trip)}>
                                                                     <MapPin className="h-4 w-4" />Mark Arrived
                                                                 </DropdownMenuItem>
@@ -347,6 +359,13 @@ const TripsManagement = () => {
                     if (selectedTrip) handleAction("transfer", selectedTrip, { destinationTripId });
                     setIsTransferOpen(false);
                 }}
+            />
+
+            {/* Trip Details Dialog */}
+            <TripDetailsDialog
+                open={isDetailsOpen}
+                onOpenChange={setIsDetailsOpen}
+                trip={selectedTrip}
             />
         </div>
     );
@@ -524,6 +543,56 @@ function TransferDialog({ open, onOpenChange, trip, loading, onConfirm }: { open
                     <Button type="button" disabled={loading || !destinationTripId.trim()} onClick={() => onConfirm(destinationTripId)}>
                         {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                         Transfer Manifests
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+// ─── Trip Details Dialog ─────────────────────────────────────────────────────────────
+function TripDetailsDialog({ open, onOpenChange, trip }: { open: boolean; onOpenChange: (v: boolean) => void; trip: Trip | null }) {
+    if (!trip) return null;
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[600px]">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <Truck className="h-5 w-5 text-primary" />
+                        Trip Details: {trip.tripId}
+                    </DialogTitle>
+                    <DialogDescription>
+                        Full overview of the trip from {trip.originBranch?.name} to {trip.destinationBranch?.name}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid grid-cols-2 gap-4 py-4 text-sm">
+                    <div className="space-y-1">
+                        <span className="text-muted-foreground block">Vehicle Info</span>
+                        <p className="font-medium">{trip.vehicleNumber || trip.vehicle?.vehicleNumber || "Unassigned"}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <span className="text-muted-foreground block">Driver Info</span>
+                        <p className="font-medium">{(trip as any).driverName || "Unassigned"}</p>
+                        <p className="text-xs text-muted-foreground">{(trip as any).driverPhone}</p>
+                    </div>
+                    <div className="space-y-1">
+                        <span className="text-muted-foreground block">Status</span>
+                        <Badge variant="outline" className="uppercase text-[10px]">{trip.status}</Badge>
+                    </div>
+                    <div className="space-y-1">
+                        <span className="text-muted-foreground block">Manifests Attached</span>
+                        <p className="font-medium">{trip.manifests?.length || 0} Manifests</p>
+                    </div>
+                    {(trip as any).breakdownReason && (
+                        <div className="col-span-2 space-y-1 bg-red-50 p-3 rounded-lg border border-red-100">
+                            <span className="text-red-700 font-medium flex items-center gap-2"><AlertTriangle className="h-4 w-4"/>Breakdown Reason</span>
+                            <p className="text-red-600">{(trip as any).breakdownReason}</p>
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                        Close
                     </Button>
                 </DialogFooter>
             </DialogContent>

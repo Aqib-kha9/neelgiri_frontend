@@ -20,6 +20,11 @@ export const statusConfig = {
     color: "bg-blue-50 text-blue-700 border-blue-200",
     icon: Clock,
   },
+  draft: {
+    label: "Draft",
+    color: "bg-gray-50 text-gray-600 border-gray-200",
+    icon: Clock,
+  },
   booked: {
     label: "Booked",
     color: "bg-blue-50 text-blue-700 border-blue-200",

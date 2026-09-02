@@ -102,7 +102,7 @@ const ShipmentsList = ({
             <Card
               key={shipment.id}
               className={`cursor-pointer transition-all border-2 ${
-                selectedShipment.id === shipment.id
+                selectedShipment?.id === shipment.id
                   ? "border-primary shadow-lg"
                   : "border-border/70 hover:border-primary/50"
               } rounded-xl`}
@@ -156,9 +156,9 @@ const ShipmentsList = ({
                     />
                     <div className="text-xs text-muted-foreground">
                       {
-                        shipment.tracking.currentLocation.timestamp.split(
+                        shipment.tracking.currentLocation?.timestamp?.split(
                           " "
-                        )[1]
+                        )[1] || ""
                       }
                     </div>
                   </div>

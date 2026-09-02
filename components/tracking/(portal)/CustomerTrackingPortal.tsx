@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import axios from "axios";
 import { toast } from "sonner";
 import HeaderSection from "./HeaderSection";
@@ -78,7 +79,9 @@ const mapShipmentToCustomerTracking = (shipment: any) => {
 
 const CustomerTrackingPortal = () => {
   const [activeTab, setActiveTab] = useState("all");
-  const [searchTerm, setSearchTerm] = useState("");
+  const searchParams = useSearchParams();
+  const awbFromUrl = searchParams.get("awb") || "";
+  const [searchTerm, setSearchTerm] = useState(awbFromUrl);
   const [statusFilter, setStatusFilter] = useState("all");
   const [cityFilter, setCityFilter] = useState("all");
   const [trackingData, setTrackingData] = useState<any[]>([]);
@@ -137,6 +140,12 @@ const CustomerTrackingPortal = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (awbFromUrl && trackingData.length > 0) {
+      setSearchTerm(awbFromUrl);
+    }
+  }, [awbFromUrl, trackingData]);
 
   const filteredTracking = trackingData.filter((tracking) => {
     const matchesSearch =

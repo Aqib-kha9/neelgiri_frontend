@@ -255,6 +255,25 @@ export function getNavigationForRole(
           masterExists.children.push({ title: "Pincode Master", href: "/dashboard/master/pincodes" });
         }
       }
+
+      // 5. Operations Management (Always show Trip Management for Partner/Branch Admin)
+      const opsExists = nav.find(item => item.title === 'Operations');
+      if (!opsExists) {
+        nav.push({
+          title: "Operations",
+          icon: "Settings",
+          children: [
+            { title: "Trip Management", href: "/dashboard/operations/trips" },
+            { title: "Hub Operations", href: "/dashboard/operations/hub" },
+            { title: "RTO Management", href: "/dashboard/operations/rto" },
+            { title: "SLA Monitoring", href: "/dashboard/operations/sla" },
+          ],
+        });
+      } else if (opsExists.children) {
+        if (!opsExists.children.find(c => c.title === 'Trip Management')) {
+          opsExists.children.unshift({ title: "Trip Management", href: "/dashboard/operations/trips" });
+        }
+      }
     }
 
     // Add Address Book for Customer role

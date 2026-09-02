@@ -48,8 +48,23 @@ interface TrackingDetailsProps {
 
 const TrackingDetails = ({
   selectedShipment,
+  lastUpdated,
   setLastUpdated,
 }: TrackingDetailsProps) => {
+  if (!selectedShipment) {
+    return (
+      <Card className="rounded-2xl border-border/70 bg-card/95 shadow-card h-full flex flex-col items-center justify-center p-8 text-center min-h-[400px]">
+        <div className="bg-blue-100 p-4 rounded-full mb-4">
+          <Package className="h-8 w-8 text-blue-600" />
+        </div>
+        <h3 className="text-xl font-semibold mb-2">No Active Shipments</h3>
+        <p className="text-muted-foreground max-w-md">
+          You don't have any shipments currently in transit. Book a new shipment or check your history to see past deliveries.
+        </p>
+      </Card>
+    );
+  }
+
   const handleRefresh = () => {
     setLastUpdated(new Date());
     // In real app, this would fetch updated data
@@ -156,45 +171,51 @@ const TrackingDetails = ({
                 />
 
                 {/* Current Location Details */}
-                <div className="rounded-xl border border-border/60 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <MapPin className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-semibold text-foreground">
-                      Current Location
-                    </span>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {selectedShipment.tracking.currentLocation.address}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Updated{" "}
-                        {selectedShipment.tracking.currentLocation.timestamp}
-                      </p>
+                {selectedShipment.tracking.currentLocation ? (
+                  <div className="rounded-xl border border-border/60 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <MapPin className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm font-semibold text-foreground">
+                        Current Location
+                      </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="space-y-3">
                       <div>
-                        <p className="text-muted-foreground">Speed</p>
-                        <p className="font-medium">
-                          {selectedShipment.tracking.currentLocation.speed}
+                        <p className="text-sm font-medium text-foreground">
+                          {selectedShipment.tracking.currentLocation.address}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Updated{" "}
+                          {selectedShipment.tracking.currentLocation.timestamp}
                         </p>
                       </div>
-                      <div>
-                        <p className="text-muted-foreground">Coordinates</p>
-                        <p className="font-mono font-medium text-xs">
-                          {selectedShipment.tracking.currentLocation.latitude.toFixed(
-                            4
-                          )}
-                          ,
-                          {selectedShipment.tracking.currentLocation.longitude.toFixed(
-                            4
-                          )}
-                        </p>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-muted-foreground">Speed</p>
+                          <p className="font-medium">
+                            {selectedShipment.tracking.currentLocation.speed}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Coordinates</p>
+                          <p className="font-mono font-medium text-xs">
+                            {selectedShipment.tracking.currentLocation.latitude.toFixed(
+                              4
+                            )}
+                            ,
+                            {selectedShipment.tracking.currentLocation.longitude.toFixed(
+                              4
+                            )}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="rounded-xl border border-border/60 p-4 text-center text-muted-foreground text-sm">
+                    Live location not available
+                  </div>
+                )}
               </div>
 
               {/* ETA and Route Info */}
@@ -269,63 +290,69 @@ const TrackingDetails = ({
                 </div>
 
                 {/* Carrier Information */}
-                <div className="rounded-xl border border-border/60 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <User className="h-4 w-4 text-purple-600" />
-                    <span className="text-sm font-semibold text-foreground">
-                      Carrier Information
-                    </span>
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {selectedShipment.tracking.carrier.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedShipment.tracking.carrier.partner}
-                      </p>
+                {selectedShipment.tracking.carrier ? (
+                  <div className="rounded-xl border border-border/60 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <User className="h-4 w-4 text-purple-600" />
+                      <span className="text-sm font-semibold text-foreground">
+                        Carrier Information
+                      </span>
                     </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Vehicle:</span>
-                        <span className="font-medium">
-                          {selectedShipment.tracking.carrier.vehicle}
-                        </span>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {selectedShipment.tracking.carrier.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedShipment.tracking.carrier.partner}
+                        </p>
                       </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Contact:</span>
-                        <span className="font-medium">
-                          {selectedShipment.tracking.carrier.phone}
-                        </span>
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Vehicle:</span>
+                          <span className="font-medium">
+                            {selectedShipment.tracking.carrier.vehicle}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Contact:</span>
+                          <span className="font-medium">
+                            {selectedShipment.tracking.carrier.phone}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 gap-2 rounded-lg border-border/70"
+                          onClick={() =>
+                            handleContactCarrier(
+                              selectedShipment.tracking.carrier
+                            )
+                          }
+                        >
+                          <PhoneCall className="h-3 w-3" />
+                          Call
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 gap-2 rounded-lg border-border/70"
+                        >
+                          <MessageCircle className="h-3 w-3" />
+                          Message
+                        </Button>
                       </div>
                     </div>
-
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 gap-2 rounded-lg border-border/70"
-                        onClick={() =>
-                          handleContactCarrier(
-                            selectedShipment.tracking.carrier
-                          )
-                        }
-                      >
-                        <PhoneCall className="h-3 w-3" />
-                        Call
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 gap-2 rounded-lg border-border/70"
-                      >
-                        <MessageCircle className="h-3 w-3" />
-                        Message
-                      </Button>
-                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="rounded-xl border border-border/60 p-4 text-center text-muted-foreground text-sm">
+                    Carrier information not available
+                  </div>
+                )}
               </div>
             </div>
           </div>

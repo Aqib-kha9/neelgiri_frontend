@@ -375,12 +375,22 @@ export const tripApi = {
   create: (data: {
     originBranchId: string;
     destinationBranchId: string;
-    vehicleId: string;
+    vehicleId?: string;
     driverId?: string;
+    marketVehicleNumber?: string;
+    marketDriverName?: string;
+    marketDriverPhone?: string;
     routeId?: string;
     manifestIds?: string[];
     remarks?: string;
-  }) => apiClient.post<{ data: Trip; message: string }>("/trips", data),
+  }) => {
+    const payload = {
+      originBranch: data.originBranchId,
+      destinationBranch: data.destinationBranchId,
+      ...data
+    };
+    return apiClient.post<{ data: Trip; message: string }>("/trips", payload);
+  },
 
   addManifests: (id: string, manifestIds: string[]) =>
     apiClient.post<{ data: Trip; message: string }>(`/trips/${id}/manifests`, { manifestIds }),
@@ -510,6 +520,11 @@ export const slaApi = {
 
   updateShipmentSLA: (awb: string, data: { slaHours?: number; slaDeadline?: string }) =>
     apiClient.put<{ data: any; message: string }>(`/sla/${awb}`, data),
+};
+
+export const masterApi = {
+  getVehicles: () => apiClient.get<any[]>("/vehicles"),
+  getDrivers: () => apiClient.get<any[]>("/drivers"),
 };
 
 // ─── Helper ───────────────────────────────────────────────────────

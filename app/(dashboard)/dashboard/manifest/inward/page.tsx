@@ -39,7 +39,7 @@ export default function InwardProcessingPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedBranch, setSelectedBranch] = useState("all");
-    const [statusFilter, setStatusFilter] = useState("in_transit"); // Default to pending inward
+    const [statusFilter, setStatusFilter] = useState("in_transit,arrived"); // Default to pending inward
     const [trackingOpen, setTrackingOpen] = useState(false);
     const [trackingShipment, setTrackingShipment] = useState<any>(null);
 
@@ -154,7 +154,7 @@ export default function InwardProcessingPage() {
                             <SelectValue placeholder="Filter Status" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="in_transit">Incoming (In Transit)</SelectItem>
+                            <SelectItem value="in_transit,arrived">Incoming (In Transit / Arrived)</SelectItem>
                             <SelectItem value="received">Received (History)</SelectItem>
                             <SelectItem value="all">All Records</SelectItem>
                         </SelectContent>
