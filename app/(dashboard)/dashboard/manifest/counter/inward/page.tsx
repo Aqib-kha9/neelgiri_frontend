@@ -43,7 +43,7 @@ export default function InwardProcessingPage() {
       console.log('🔍 [INWARD PAGE] Starting fetch...');
       setLoading(true);
 
-      const url = '/api/manifests?type=inward&status=in_transit';
+      const url = '/api/manifests?type=inward&status=in_transit,arrived';
       console.log('🔍 [INWARD PAGE] Fetching from:', url);
 
       const token = localStorage.getItem('token');
